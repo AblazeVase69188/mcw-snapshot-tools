@@ -44,12 +44,12 @@ def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹�
     toast.show()
 
 
-def check_new_version():
+def check_new_version():  # 检测新版本发布
     manifest_json = get_json(MANIFEST_URL)
     latest_snapshot = manifest_json["latest"]["snapshot"]
     latest_release = manifest_json["latest"]["release"]
 
-    #return "25w37a", manifest_json["versions"]  #调试内容
+    #return "1.21.9-rc1", manifest_json["versions"]  #调试内容
 
     while True:
         time.sleep(interval)
@@ -62,7 +62,7 @@ def check_new_version():
             return cur_latest_release, cur_manifest_json["versions"]
 
 
-def get_version_type(version_name):
+def get_version_type(version_name):  # 返回版本类型
     current_year = time.strftime("%y")
     if "1." in version_name:
         if "-pre" in version_name:
@@ -77,7 +77,7 @@ def get_version_type(version_name):
         return "N/A"
 
 
-def get_zh_version_type(version_type):
+def get_zh_version_type(version_type):  # 返回版本类型的中文名称
     if version_type == "Pre-release":
         return "预发布版"
     elif version_type == "Release Candidate":
@@ -96,8 +96,36 @@ def get_timestamp(timestamp_str):
     return dt, dt_8
 
 
-def get_pre_or_rc_article(version_name):
-    return
+def get_article(version_name):  # 返回官网博文链接
+    left_str = "{{"
+    version_type = get_version_type(version_name)
+    if version_type == "Pre-release":
+        parts = version_name.split('-')
+        parent = parts[0]
+        pre_number = parts[1].replace("pre", "")
+        return left_str + f"""article|minecraft-{parent.replace(".", "-")}-pre-release-{pre_number}|Minecraft {parent} Pre-Release {pre_number}"""
+    elif version_type == "Release Candidate":
+        parts = version_name.split('-')
+        parent = parts[0]
+        rc_number = parts[1].replace("rc", "")
+        return left_str + f"""article|minecraft-{parent.replace(".", "-")}-release-candidate-{rc_number}|Minecraft {parent} Release Candidate {rc_number}"""
+    elif version_type == "Release":
+        return left_str + f"""article|minecraft-java-edition-{version_name.replace(".", "-")}|Minecraft Java Edition {version_name}"""
+    elif version_type == "Snapshot":
+        return left_str + f"""snap|{version_name}"""
+    else:
+        return ""
+
+
+def get_page_url(version_name):  # 返回页面链接
+    version_type = get_version_type(version_name)
+    if version_type == "Snapshot":
+        version_page_name = version_name
+    else:
+        version_page_name = "Java%E7%89%88" + version_name
+
+    version_page_url = WIKI_BASE_URL + version_page_name
+    return version_page_url
 
 
 with open("config.json", "r", encoding="utf-8") as config_file:
@@ -121,14 +149,7 @@ toast_notification(f"{zh_version_type}{new_version}已发布。")
 print(f"{zh_version_type}{new_version}已发布。")
 print(f"发布时间：{release_dt_8.strftime("%Y年%m月%d日%H:%M:%S（北京时间）")}")
 
-if version_type == "Snapshot":
-    version_page_name = new_version
-    zh_version_page_name = version_page_name
-else:
-    version_page_name = "Java%E6%90%9C%E7%B4%A2" + new_version
-    zh_version_page_name = "Java版" + new_version
-
-version_page_url = WIKI_BASE_URL + version_page_name
+version_page_url = get_page_url(new_version)
 
 print(f"新页面链接：{version_page_url}?action=edit")
 print("内容为：")
@@ -177,16 +198,18 @@ version_page_content += f"""
 }}}}<onlyinclude>
 
 '''{new_version}'''是[[Java版{parent}]]"""
-version_page_content += """{{conjecture tag}}""" if parent == "1.（手动填写）" else """"""
-version_page_content += f"""的第{len(previous_versions)}个{zh_version_type}，发布于{release_dt_date}<ref>"""
-version_page_content += f"""{{{{snap|{new_version}|{release_dt.strftime("%b %d, %Y")}}}}}""" if version_type == "Snapshot" else f"""{{{{article|minecraft-1-21-8-release-candidate-1|Minecraft 1.21.8 Release Candidate 1|{release_dt.strftime("%b %d, %Y")}}}}}"""
-version_page_content += f"""</ref>。</onlyinclude>
+version_page_content += """{{conjecture tag}}的""" if parent == "1.（手动填写）" else """的"""
+version_page_content += f"""第{len(previous_versions)}""" if len(previous_versions) > 1 else """首""" 
+version_page_content += f"""个{zh_version_type}，发布于{release_dt_date}<ref>"""
+version_page_content += f"""{get_article(new_version)}"""
+version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
+version_page_content += """}}</ref>。</onlyinclude>
 
 == 参考 ==
-{{{{Reflist}}}}
+{{Reflist}}
 
 == 导航 ==
-{{{{Navbox Java Edition versions|1.21}}}}"""
+{{Navbox Java Edition versions|1.21}}"""
 
 print(version_page_content)
 print("----")
@@ -195,19 +218,40 @@ print("编辑下面页面：")
 
 if version_type in ["Pre-release", "Release Candidate"]:
     redirect_page_url = WIKI_BASE_URL + new_version
-    print(f"重定向页面链接：{redirect_page_url}?action=edit，内容为：#REDIRECT [[{zh_version_page_name}]]")
+    print(f"重定向页面：{redirect_page_url}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
     disambig_page_url = WIKI_BASE_URL + parent
-    print(f"{disambig_page_url}?action=edit")
+    print(f"添加版本链接：https://zh.minecraft.wiki/w/1.21?action=edit")  # 硬编码
 
-template_version_url = WIKI_BASE_URL + "Template:Version"
-print(f"{template_version_url}?action=edit")
-prev_page_url = WIKI_BASE_URL + prev
-print(prev_page_url)  # 目前可能为重定向，不编辑
 version_list_page_url = WIKI_BASE_URL + "Java%E7%89%88%E7%89%88%E6%9C%AC%E8%AE%B0%E5%BD%95/%E5%BC%80%E5%8F%91%E7%89%88%E6%9C%AC"
-print(f"{version_list_page_url}?action=edit")
+print(f"添加版本链接：{version_list_page_url}?action=edit")
 navbox_page_url = WIKI_BASE_URL + "Template:Navbox_Java_Edition_versions"
-print(f"{navbox_page_url}?action=edit")
-# print(f"{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
+print(f"添加版本链接：{navbox_page_url}?action=edit")
+template_version_url = WIKI_BASE_URL + "Template:Version"
+print(f"更新版本号：{template_version_url}?action=edit")
+prev_page_url = get_page_url(prev)
+print(f"在infobox中添加next参数：{prev_page_url}?action=edit")
+print("")
+
+print("上传5个文件：https://zh.minecraft.wiki/w/Special:BatchUpload")
+print("版本宣传图文件名为：")
+print(f"{new_version}.png")
+print("版本宣传图，内容为：")
+print("----")
+print("\n== 许可协议 ==\n{{License Mojang}}\n\n[[Category:截图]]\n[[Category:版本宣传图]]")
+print("----")
+print("菜单屏幕截图文件名为：")
+print(f"Java Edition {new_version} Simplified.png")
+print(f"Java Edition {new_version} Traditional.png")
+print(f"Java Edition {new_version} Traditional HK.png")
+print(f"Java Edition {new_version} Literary.png")
+print("菜单屏幕截图，内容为：")
+print("----")
+print("== 摘要 ==\n{{Other translation files}}\n\n== 许可协议 ==\n{{License Mojang}}\n\n[[Category:主菜单截图]]")
+print("----")
+print(f"菜单屏幕截图重定向：{WIKI_BASE_URL}File:Java_Edition_{new_version}.png?action=edit，内容为：#REDIRECT [[File:Java Edition {new_version} Simplified.png]]")
+print("")
+
+print(f"客户端jar文件内的version.json -> protocol_version：{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
 
 input("按回车键退出")
 sys.exit(1)
