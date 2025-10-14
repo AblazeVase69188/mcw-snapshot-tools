@@ -11,6 +11,7 @@ from playsound3 import playsound
 from winotify import Notification
 
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
+ARTICLE_FEED_URL = "https://www.minecraft.net/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json"  # from https://github.com/Teahouse-Studios/akari-bot/blob/51ec0995fd8e3eb0ab962abe157ab1badf1d13f0/modules/minecraft_news/__init__.py#L65
 WIKI_BASE_URL = "https://zh.minecraft.wiki/w/"
 sound_files = [
     "warn1.mp3",
@@ -44,12 +45,22 @@ def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹�
     toast.show()
 
 
-def check_new_version():  # 检测新版本发布
+def check_new_version(selected_version):  # 检测新版本发布
     manifest_json = get_json(MANIFEST_URL)
     latest_snapshot = manifest_json["latest"]["snapshot"]
     latest_release = manifest_json["latest"]["release"]
 
-    # return "25w41a", manifest_json["versions"]  #调试内容
+    if selected_version != "":
+        versions = manifest_json["versions"]
+        for i, version in enumerate(versions):
+            if version["id"] == selected_version:
+                return selected_version, versions[i:]
+
+        print("未找到版本，请检查输入是否正确")
+        input("按回车键退出")
+        sys.exit(1)
+
+    # article_json = get_json(ARTICLE_FEED_URL)
 
     while True:
         time.sleep(interval)
@@ -60,6 +71,21 @@ def check_new_version():  # 检测新版本发布
             return cur_latest_snapshot, cur_manifest_json["versions"]
         if cur_latest_release != latest_release:
             return cur_latest_release, cur_manifest_json["versions"]
+        
+        article_code = '''
+        cur_article_json = get_json(ARTICLE_FEED_URL)
+        if cur_article_json != article_json:
+            current_year = time.strftime("%y")
+            article_url = cur_article_json["article_grid"][0]["article_url"]
+            title = cur_article_json["article_grid"][0]["title"]
+            if any(x in article_url for x in [f"minecraft-snapshot-{current_year}w", "-pre-release-", "-release-candidate-", "minecraft-java-edition-1-"]):
+                toast_notification(f"Minecraft官网发布了新的文章：\n{title}\n请重启程序以尝试获取新版本json", False)
+                print(f"Minecraft官网发布了新的文章：{title}，请重启程序以尝试获取新版本json")
+                input("按回车键退出")
+                sys.exit(1)
+            else:
+                article_json = cur_article_json
+                continue'''
 
 
 def get_version_type(version_name):  # 返回版本类型
@@ -136,9 +162,9 @@ with open("config.json", "r", encoding="utf-8") as config_file:
 session = requests.Session()
 session.headers.update({"User-Agent": user_agent})
 
-print("启动成功", end='\n\n')
+selected_version = input("输入一个版本号，留空则自动检测最新版本：")
 
-new_version, all_version_info = check_new_version()
+new_version, all_version_info = check_new_version(selected_version)
 version_type = get_version_type(new_version)
 zh_version_type = get_zh_version_type(version_type)
 release_time = all_version_info[0]["releaseTime"]
@@ -146,13 +172,17 @@ release_dt, release_dt_8 = get_timestamp(release_time)
 release_dt_date = f"{release_dt.year}年{release_dt.month}月{release_dt.day}日"
 is_initial_snapshot = False
 
-toast_notification(f"{zh_version_type}{new_version}已发布。")
+if selected_version == "":
+    toast_notification(f"{zh_version_type}{new_version}已发布。")
 print(f"{zh_version_type}{new_version}已发布。")
 print(f"发布时间：{release_dt_8.strftime("%Y年%m月%d日%H:%M:%S（北京时间）")}")
 
 parent_is_predicted = True
 if version_type in ["Pre-release", "Release Candidate"]:
     parent = new_version.split('-')[0]
+    parent_is_predicted = False
+elif version_type == "Release":
+    parent = ""
     parent_is_predicted = False
 
 if parent_is_predicted == True:
@@ -168,9 +198,14 @@ version_json_url = all_version_info[0]["url"]
 version_json = get_json(version_json_url)
 version_json_downloads = version_json["downloads"]
 
-previous_versions = []
-prevparent = ""
-prev = all_version_info[1]["id"]
+previous_versions = []  # 用于第几个同类开发版本的计数
+prevparent = "" if version_type != "Release" else "1.21"  # 1.21为硬编码
+
+version_json_type = all_version_info[0]["type"]
+for version in all_version_info[1:]:
+    if version["type"] == version_json_type:
+        prev = version["id"]
+        break
 
 if version_type not in ["Release", "N/A"]:
     if all_version_info[1]["type"] == "release":
@@ -205,21 +240,32 @@ version_page_content += f"""{prev}""" if not is_initial_snapshot else """"""
 version_page_content += f"""
 |next=
 |nextparent=
-}}}}<onlyinclude>
+}}}}"""
+version_page_content += """<onlyinclude>""" if version_type not in ["Release", "N/A"] else """"""
+version_page_content += f"""
 
-'''{new_version}'''是[[Java版{parent}]]"""
-version_page_content += """{{conjecture tag}}的""" if parent_is_predicted else """的"""
-version_page_content += f"""第{len(previous_versions)}""" if len(previous_versions) > 1 else """首""" 
-version_page_content += f"""个{zh_version_type}，发布于{release_dt_date}<ref>"""
+'''{new_version}'''是"""
+if version_type not in ["Release", "N/A"]:
+    version_page_content += f"""[[Java版{parent}]]"""
+    version_page_content += """{{conjecture tag}}的""" if parent_is_predicted else """的"""
+    version_page_content += f"""第{len(previous_versions)}""" if len(previous_versions) > 1 else """首"""
+    version_page_content += f"""个{zh_version_type}，"""
+else:
+    version_page_content += """{{el|je}}的一次次要更新，"""
+
+version_page_content += f"""发布于{release_dt_date}<ref>"""
 version_page_content += f"""{get_article(new_version)}"""
 version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
-version_page_content += """}}</ref>。</onlyinclude>
+version_page_content += """}}</ref>。"""
+version_page_content += """
+
+</onlyinclude>
 
 == 参考 ==
 {{Reflist}}
 
 == 导航 ==
-{{Navbox Java Edition versions|1.21}}"""
+{{Navbox Java Edition versions|1.21}}""" if version_type not in ["Release", "N/A"] else """"""
 
 print(version_page_content)
 print("----")
@@ -232,14 +278,17 @@ if version_type in ["Pre-release", "Release Candidate"]:
     disambig_page_url = WIKI_BASE_URL + parent
     print(f"添加版本链接：https://zh.minecraft.wiki/w/1.21?action=edit")  # 1.21为硬编码
 
-version_list_page_url = WIKI_BASE_URL + "Java%E7%89%88%E7%89%88%E6%9C%AC%E8%AE%B0%E5%BD%95/%E5%BC%80%E5%8F%91%E7%89%88%E6%9C%AC"
-print(f"添加版本链接：{version_list_page_url}?action=edit")
-navbox_page_url = WIKI_BASE_URL + "Template:Navbox_Java_Edition_versions"
-print(f"添加版本链接：{navbox_page_url}?action=edit")
 template_version_url = WIKI_BASE_URL + "Template:Version"
 print(f"更新版本号：{template_version_url}?action=edit")
-prev_page_url = get_page_url(prev)
-print(f"在infobox中添加next参数：{prev_page_url}?action=edit")
+
+if version_type not in ["Release", "N/A"]:
+    version_list_page_url = WIKI_BASE_URL + "Java%E7%89%88%E7%89%88%E6%9C%AC%E8%AE%B0%E5%BD%95/%E5%BC%80%E5%8F%91%E7%89%88%E6%9C%AC"
+    print(f"添加版本链接：{version_list_page_url}?action=edit")
+    navbox_page_url = WIKI_BASE_URL + "Template:Navbox_Java_Edition_versions"
+    print(f"添加版本链接：{navbox_page_url}?action=edit")
+    if not is_initial_snapshot:
+        prev_page_url = get_page_url(prev)
+        print(f"在infobox中添加next参数：{prev_page_url}?action=edit")
 print("")
 
 if is_initial_snapshot:
@@ -308,16 +357,16 @@ if is_initial_snapshot:
 
 print("上传5个文件：https://zh.minecraft.wiki/w/Special:BatchUpload")
 print("版本宣传图文件名为：")
-print(f"{new_version}.png")
+print(f"{new_version}")
 print("版本宣传图，内容为：")
 print("----")
 print("\n== 许可协议 ==\n{{License Mojang}}\n\n[[Category:截图]]\n[[Category:版本宣传图]]")
 print("----")
 print("菜单屏幕截图文件名为：")
-print(f"Java Edition {new_version} Simplified.png")
-print(f"Java Edition {new_version} Traditional.png")
-print(f"Java Edition {new_version} Traditional HK.png")
-print(f"Java Edition {new_version} Literary.png")
+print(f"Java Edition {new_version} Simplified")
+print(f"Java Edition {new_version} Traditional")
+print(f"Java Edition {new_version} Traditional HK")
+print(f"Java Edition {new_version} Literary")
 print("菜单屏幕截图，内容为：")
 print("----")
 print("== 摘要 ==\n{{Other translation files}}\n\n== 许可协议 ==\n{{License Mojang}}\n\n[[Category:主菜单截图]]")
