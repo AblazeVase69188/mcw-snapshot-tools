@@ -1,11 +1,11 @@
 import json
 import requests
 import sys
-'''
+
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
 WIKI_API_URL = "https://zh.minecraft.wiki/api.php"
 
-release = input("输入一个版本号（如1.21.9）：")
+release = input("输入一个版本号（留空则获取最新版本）：")
 
 with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
@@ -20,7 +20,7 @@ try:
     response.raise_for_status()
     manifest_json = response.json()
 except requests.exceptions.RequestException as e:
-    print(f"网络请求出现异常，内容为{e}")
+    print(f"piston-meta.mojang.com网络请求出现异常，内容为{e}")
     input("按回车键退出")
     sys.exit(1)
 
@@ -30,10 +30,14 @@ snapshot_list = []
 flag = False
 
 # 获取此版本下所有快照
-for version in versions:
+for i, version in enumerate(versions):
     if version["id"] == release:
         flag = True
         continue
+    elif release == "" and i == 0:
+        flag = True
+        if version["type"] == "release":
+            continue
     if version["type"] == "release" and flag:
         break
     if flag:
@@ -65,7 +69,7 @@ try:
     response.raise_for_status()
     snapshot_page_json = response.json()
 except requests.exceptions.RequestException as e:
-    print(f"网络请求出现异常，内容为{e}")
+    print(f"zh.minecraft.wiki网络请求出现异常，内容为{e}")
     input("按回车键退出")
     sys.exit(1)
 
@@ -77,7 +81,7 @@ raw_pages = [
 ]
 
 print("已成功获取所有快照页面内容，正在处理中")
-
+'''
 # 临时功能：将API结果保存以便参考
 try:
     output_filename = f"{release}.json"
@@ -86,10 +90,10 @@ try:
     print(f"已将内容成功保存到文件：{output_filename}")
 except Exception as e:
     print(f"保存文件时出错：{e}")
-'''
+
 # 临时功能：加载保存的API结果
 try:
-    input_filename = "1.21.9.json"
+    input_filename = "merge_snapshot_page_test.json"
     with open(input_filename, "r", encoding="utf-8") as f:
         raw_pages = json.load(f)
     print(f"已成功加载{len(raw_pages)}个页面。")
@@ -101,7 +105,7 @@ except Exception as e:
     print(f"读取文件时出错：{e}")
     input("按回车键退出")
     sys.exit(1)
-
+'''
 # 获取{{Undecided translation}}参数列表
 ut_text = None
 ut_params = set()
@@ -124,7 +128,7 @@ if ut_params:
 additions_marker = "== 新内容 =="
 changes_marker = "== 更改 =="
 fixes_marker = "== 修复 =="
-end_marker_list = ["== 参考 ==", "== 导航 =="]
+end_marker_list = ["== 参考 ==", "== 导航 ==", "== 你知道吗 ==", "== 注释 ==", "== 画廊 =="]
 feature_marker_list = ["=== 方块 ===", "=== 物品 ===", "=== 生物 ===", "=== 非生物实体 ===", "=== 世界生成 ===", "=== 游戏内容 ===", "=== 命令格式 ===", "=== 常规 ==="]
 merged_features_data = [
     # 新内容
@@ -230,7 +234,7 @@ for i, page_content in enumerate(raw_pages):
                         current_title = line[2:].strip()
                         current_content = []
                     else:  # 获取内容
-                        stripped_line = line.strip()
+                        stripped_line = line.rstrip()  # 要使用rstrip，以免行首表缩进的空格被错误移除
                         if stripped_line:
                             current_content.append(stripped_line)
 
@@ -284,7 +288,7 @@ for i, page_content in enumerate(raw_pages):
                         current_title = line[2:].strip()
                         current_content = []
                     else:  # 获取内容
-                        stripped_line = line.strip()
+                        stripped_line = line.rstrip()  # 要使用rstrip，以免行首表缩进的空格被错误移除
                         if stripped_line:
                             current_content.append(stripped_line)
                 
@@ -469,11 +473,20 @@ if merged_fixes_data['issues'] or merged_fixes_data['otherissues']:
 
     print("{{fixes|" + '|'.join(fixes_params), end="")
 
-    # TODO：“|;1.21.x的漏洞”需要按x排序
-
     if merged_fixes_data['issues']:
         print()
-        for category, bugs in merged_fixes_data['issues'].items():
+        
+        def sort_key(k: str):
+            if k == ';old':
+                return (0,)
+            if k.startswith(';1.21.'):
+                num_part = k[len(';1.21.'):-len('的漏洞')]
+                return (1, int(num_part))
+            return (2, k)
+
+        sorted_issues = sorted(merged_fixes_data['issues'].items(), key=lambda item: sort_key(item[0]))
+
+        for category, bugs in sorted_issues:
             print(f"|{category}")
             
             sorted_bugs = sorted(bugs.items(), key=lambda item: int(item[0]))
