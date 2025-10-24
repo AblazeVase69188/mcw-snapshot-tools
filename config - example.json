@@ -1,5 +1,5 @@
 {
-    "user_agent": "不确定有没有用",
+    "user_agent": "",
     "interval": "整数，大于等于5",
     "panorama_source": "path/to/source/for/update_screen_with_panorama.py",
     "panorama_destination": "path/to/destination/for/update_screen_with_panorama.py"
