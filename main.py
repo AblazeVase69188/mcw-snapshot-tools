@@ -122,6 +122,20 @@ def get_timestamp(timestamp_str):
     return dt, dt_8
 
 
+def get_mojira_version(version_name):  # 返回Mojira形式的版本号
+    version_type = get_version_type(version_name)
+    if version_type == "Pre-release":
+        parts = version_name.split('-')
+        parent = parts[0]
+        pre_number = parts[1].replace("pre", "")
+        return f"""{parent} Pre-Release {pre_number}"""
+    elif version_type == "Release Candidate":
+        parts = version_name.split('-')
+        parent = parts[0]
+        rc_number = parts[1].replace("rc", "")
+        return f"""{parent} Release Candidate {rc_number}"""
+
+
 def get_article(version_name):  # 返回官网博文链接
     left_str = "{{"
     version_type = get_version_type(version_name)
@@ -256,10 +270,15 @@ else:
 version_page_content += f"""发布于{release_dt_date}<ref>"""
 version_page_content += f"""{get_article(new_version)}"""
 version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
-version_page_content += """}}</ref>。"""
+version_page_content += """}}</ref>，修复了一些漏洞。"""
 version_page_content += """
 
-</onlyinclude>
+== 修复 ==
+{{fixes|fixedin="""
+version_page_content += f"""{get_mojira_version(new_version)}""" if version_type in ["Pre-release", "Release Candidate"] else f"""{new_version}"""
+version_page_content += """|showdesc=1|new=1
+
+}}</onlyinclude>
 
 == 参考 ==
 {{Reflist}}
