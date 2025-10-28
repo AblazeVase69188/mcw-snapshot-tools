@@ -1,3 +1,5 @@
+# 警告：请对自己提交到Wiki上的内容负责。
+
 # mcw-snapshot-tools
 中文Minecraft Wiki快照页面工具
 
