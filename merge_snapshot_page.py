@@ -1,6 +1,7 @@
 import json
 import requests
 import sys
+import time
 
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
 WIKI_API_URL = "https://zh.minecraft.wiki/api.php"
@@ -15,6 +16,7 @@ session = requests.Session()
 session.headers.update({"User-Agent": user_agent})
 
 # 获取版本列表
+start = time.time()
 try:
     response = session.get(MANIFEST_URL)
     response.raise_for_status()
@@ -23,6 +25,8 @@ except requests.exceptions.RequestException as e:
     print(f"piston-meta.mojang.com网络请求出现异常，内容为{e}")
     input("按回车键退出")
     sys.exit(1)
+end = time.time()
+print(f"获取版本列表耗时{end - start:.1f}秒")
 
 versions = manifest_json["versions"]
 
@@ -48,7 +52,7 @@ if snapshot_list == []:
     input("按回车键退出")
     sys.exit(1)
 
-print(f"已找到{len(snapshot_list)}个快照")
+print(f"已找到{len(snapshot_list)}个快照：{'、'.join(snapshot_list)}")
 
 # 调整为Wiki页面标题
 for i, snapshot in enumerate(snapshot_list):
@@ -64,6 +68,7 @@ page_query_params = {
     "rvprop": "content"
 }
 
+start = time.time()
 try:
     response = session.get(WIKI_API_URL, params=page_query_params)
     response.raise_for_status()
@@ -72,6 +77,8 @@ except requests.exceptions.RequestException as e:
     print(f"zh.minecraft.wiki网络请求出现异常，内容为{e}")
     input("按回车键退出")
     sys.exit(1)
+end = time.time()
+print(f"获取快照页面内容耗时{end - start:.1f}秒")
 
 # 得到所有快照的页面源代码，从旧到新
 raw_pages = [
@@ -79,8 +86,6 @@ raw_pages = [
     for page in snapshot_page_json["query"]["pages"]
     if "missing" not in page
 ]
-
-print("已成功获取所有快照页面内容，正在处理中")
 '''
 # 临时功能：将API结果保存以便参考
 try:
@@ -411,7 +416,7 @@ for i, page_content in enumerate(raw_pages):
                     current_title = line[2:].strip()
                     current_content = []
                 else:
-                    stripped_line = line.strip()
+                    stripped_line = line.strip().rstrip("</onlyinclude>")
                     if stripped_line:
                         current_content.append(stripped_line)
             
@@ -424,42 +429,42 @@ for i, page_content in enumerate(raw_pages):
 # print(json.dumps(merged_features_data, ensure_ascii=False, indent=4))
 # print(json.dumps(merged_fixes_data, ensure_ascii=False, indent=4))
 
-# 打印
-print("合并后的页面，内容为：")
-print("----")
+# 收集并保存到文件
+output_lines = []
 if ut_text:
-    print(ut_text, end='\n\n')
+    output_lines.append(ut_text)
+    output_lines.append("")
 
 for i, second_level_item in enumerate(merged_features_data):
     if not any(second_level_item):
         continue
 
     if i == 0:
-        print("== 新内容 ==")
+        output_lines.append("== 新内容 ==")
     elif i == 1:
-        print("== 更改 ==")
+        output_lines.append("== 更改 ==")
     
     for j, third_level_item in enumerate(second_level_item):
         if third_level_item:
-            print(feature_marker_list[j])
+            output_lines.append(feature_marker_list[j])
             for title, content_list in third_level_item.items():
-                print(f"; {title}")
+                output_lines.append(f"; {title}")
                 init = [x for x in content_list if not isinstance(x, list)]
                 after = [s for sub in content_list if isinstance(sub, list) for s in sub]
                 # 打印首批内容
                 for line in init:
-                    print(line)
+                    output_lines.append(line)
                 
                 # 后续内容手工处理
                 if after:
-                    print("<!--")
+                    output_lines.append("<!--")
                     for content in after:
-                        print(content)
-                    print("-->")
-                print()
+                        output_lines.append(content)
+                    output_lines.append("-->")
+                output_lines.append("")
 
 if merged_fixes_data['issues'] or merged_fixes_data['otherissues']:
-    print("== 修复 ==")
+    output_lines.append("== 修复 ==")
 
     fixes_params = [f"fixedin={','.join(merged_fixes_data['fixedin'])}"]
     if len(merged_fixes_data['fixedin']) > 1:
@@ -471,33 +476,46 @@ if merged_fixes_data['issues'] or merged_fixes_data['otherissues']:
     if merged_fixes_data['otherissuescount'] != 0:
         fixes_params.append(f"otherissuescount={merged_fixes_data['otherissuescount']}")
 
-    print("{{fixes|" + '|'.join(fixes_params), end="")
+    fixes_printed = False
 
     if merged_fixes_data['issues']:
-        print()
-        
+        output_lines.append("{{fixes|" + '|'.join(fixes_params))
+        fixes_printed = True
+
         def sort_key(k: str):
             if k == ';old':
                 return (0,)
+            if k == ';1.21的漏洞':
+                return (1, 0)
             if k.startswith(';1.21.'):
                 num_part = k[len(';1.21.'):-len('的漏洞')]
-                return (1, int(num_part))
-            return (2, k)
+                return (2, int(num_part))
+            return (3, k)
 
         sorted_issues = sorted(merged_fixes_data['issues'].items(), key=lambda item: sort_key(item[0]))
 
         for category, bugs in sorted_issues:
-            print(f"|{category}")
+            output_lines.append(f"|{category}")
             
             sorted_bugs = sorted(bugs.items(), key=lambda item: int(item[0]))
             
             for bug_id, desc in sorted_bugs:
-                print(f"|{bug_id}|{desc}")
-
-    print("}}")
+                output_lines.append(f"|{bug_id}|{desc}")
+        
+        output_lines.append("}}")
 
     if merged_fixes_data['otherissues']:
+        if not fixes_printed:
+            output_lines.append("{{fixes|" + '|'.join(fixes_params) + "}}")
         for title, issues in merged_fixes_data['otherissues'].items():
-            print(f"; {title}")
+            output_lines.append(f"; {title}")
             for issue in issues:
-                print(issue)
+                output_lines.append(issue)
+
+output_filename = f"{release if release.strip() else 'latest'}.txt"
+try:
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write("\n".join(output_lines))
+    print(f"结果已写入文件：{output_filename}")
+except Exception as e:
+    print(f"写入{output_filename}时出错：{e}")
