@@ -32,6 +32,33 @@ def get_json(url):
         sys.exit(1)
 
 
+def get_json_conditional(url):
+    try:
+        headers = {}
+        etag = etag_cache.get(url)
+        if etag:
+            headers["If-None-Match"] = etag
+
+        response = session.get(url, headers=headers)
+
+        if response.status_code == 304:
+            return None, True
+
+        response.raise_for_status()
+
+        new_etag = response.headers.get("ETag")
+        if new_etag:
+            etag_cache[url] = new_etag
+
+        return response.json(), False
+
+    except requests.exceptions.RequestException as e:
+        toast_notification("网络请求出现异常", False)
+        print(f"网络请求出现异常，内容为{e}")
+        input("按回车键退出")
+        sys.exit(1)
+
+
 def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹窗通知
     if doplaysound:
         selected_sound = random.choice(sound_files)
@@ -46,7 +73,7 @@ def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹�
 
 
 def check_new_version(selected_version):  # 检测新版本发布
-    manifest_json = get_json(MANIFEST_URL)
+    manifest_json, _ = get_json_conditional(MANIFEST_URL)
     latest_snapshot = manifest_json["latest"]["snapshot"]
     latest_release = manifest_json["latest"]["release"]
 
@@ -60,20 +87,26 @@ def check_new_version(selected_version):  # 检测新版本发布
         input("按回车键退出")
         sys.exit(1)
 
-    # article_json = get_json(ARTICLE_FEED_URL)
+    # article_json, _ = get_json_conditional(ARTICLE_FEED_URL)
 
     while True:
         time.sleep(interval)
-        cur_manifest_json = get_json(MANIFEST_URL)
+        cur_manifest_json, not_modified = get_json_conditional(MANIFEST_URL)
+        if not_modified:
+            continue
+
         cur_latest_snapshot = cur_manifest_json["latest"]["snapshot"]
         cur_latest_release = cur_manifest_json["latest"]["release"]
         if cur_latest_snapshot != latest_snapshot:
             return cur_latest_snapshot, cur_manifest_json["versions"]
         if cur_latest_release != latest_release:
             return cur_latest_release, cur_manifest_json["versions"]
-        
+
         article_code = '''
-        cur_article_json = get_json(ARTICLE_FEED_URL)
+        cur_article_json, not_modified = get_json_conditional(ARTICLE_FEED_URL)
+        if not_modified:
+            continue
+
         if cur_article_json != article_json:
             current_year = time.strftime("%y")
             article_url = cur_article_json["article_grid"][0]["article_url"]
@@ -176,6 +209,8 @@ with open("config.json", "r", encoding="utf-8") as config_file:
 session = requests.Session()
 session.headers.update({"User-Agent": user_agent})
 
+etag_cache = {}
+
 selected_version = input("输入一个版本号，留空则自动检测最新版本：")
 
 new_version, all_version_info = check_new_version(selected_version)
@@ -213,7 +248,7 @@ version_json = get_json(version_json_url)
 version_json_downloads = version_json["downloads"]
 
 previous_versions = []  # 用于第几个同类开发版本的计数
-prevparent = "" if version_type != "Release" else "1.21"  # 1.21为硬编码
+prevparent = "" if version_type != "Release" else "1.21" # 1.21为硬编码
 
 version_json_type = all_version_info[0]["type"]
 for version in all_version_info[1:]:
@@ -243,10 +278,14 @@ version_page_content += """""" if version_type in ["N/A", "Release"] else f"""
 version_page_content += f"""
 |date={release_dt_date}
 |jsonhash={version_json_url[len("https://piston-meta.mojang.com/v1/packages/"):].split('/')[0]}
-|clienthash={version_json_downloads["client"]["sha1"]}
-|clientmap={version_json_downloads["client_mappings"]["sha1"]}
-|serverhash={version_json_downloads["server"]["sha1"]}
-|servermap={version_json_downloads["server_mappings"]["sha1"]}
+|clienthash={version_json_downloads["client"]["sha1"]}"""
+version_page_content += f"""
+|clientmap={version_json_downloads["client_mappings"]["sha1"]}""" if version_json_downloads["client_mappings"] else """"""
+version_page_content += f"""
+|serverhash={version_json_downloads["server"]["sha1"]}"""
+version_page_content += f"""
+|servermap={version_json_downloads["server_mappings"]["sha1"]}""" if version_json_downloads["server_mappings"] else """"""
+version_page_content += f"""
 |parent={parent}
 |prevparent={prevparent}
 |prev="""
