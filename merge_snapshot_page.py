@@ -224,19 +224,14 @@ for i, page_content in enumerate(raw_pages):
                 current_title = ""
                 current_content = []
                 for line in lines:
-                    if line.startswith(';') and len(line) > 1 and line[1] != ' ':
-                        print(f"{snapshot_list[i]}“新内容”段落有假标题不符合格式指导，请检查。")
-                        input("按回车键退出")
-                        sys.exit(1)
-
-                    if line.startswith('; '):
+                    if line.startswith("'''") and line.endswith("'''") and len(line) > 6:
                         if current_title and current_content:  # 并非首个假标题
                             if current_title in merged_features_data[0][j]:
                                 merged_features_data[0][j][current_title].append(current_content)
                             else:
                                 merged_features_data[0][j][current_title] = current_content
                         # 获取当前假标题，并重置内容列表
-                        current_title = line[2:].strip()
+                        current_title = line.strip()
                         current_content = []
                     else:  # 获取内容
                         stripped_line = line.rstrip()  # 要使用rstrip，以免行首表缩进的空格被错误移除
@@ -271,12 +266,7 @@ for i, page_content in enumerate(raw_pages):
                 current_title = ""
                 current_content = []
                 for line in lines:
-                    if line.startswith(';') and len(line) > 1 and line[1] != ' ':
-                        print(f"{snapshot_list[i]}“更改”段落有假标题不符合格式指导，请检查。")
-                        input("按回车键退出")
-                        sys.exit(1)
-
-                    if line.startswith('; '):
+                    if line.startswith("'''") and line.endswith("'''") and len(line) > 6:
                         if current_title and current_content:  # 并非首个假标题
                             if current_title in merged_features_data[1][j]:  # 之前已经检查过，确定不应该移去“新内容”
                                 merged_features_data[1][j][current_title].append(current_content)
@@ -290,7 +280,7 @@ for i, page_content in enumerate(raw_pages):
                                 if not ismoved:
                                     merged_features_data[1][j][current_title] = current_content
                         # 获取当前假标题，并重置内容列表
-                        current_title = line[2:].strip()
+                        current_title = line.strip()
                         current_content = []
                     else:  # 获取内容
                         stripped_line = line.rstrip()  # 要使用rstrip，以免行首表缩进的空格被错误移除
@@ -407,13 +397,13 @@ for i, page_content in enumerate(raw_pages):
             current_title = ""
             current_content = []
             for line in lines:
-                if line.startswith('; '):
+                if line.startswith("'''") and line.endswith("'''") and len(line) > 6:
                     if current_title and current_content:
                         if current_title in merged_fixes_data['otherissues']:
                             merged_fixes_data['otherissues'][current_title].extend(current_content)
                         else:
                             merged_fixes_data['otherissues'][current_title] = current_content
-                    current_title = line[2:].strip()
+                    current_title = line.strip()
                     current_content = []
                 else:
                     stripped_line = line.strip().rstrip("</onlyinclude>")
@@ -448,7 +438,7 @@ for i, second_level_item in enumerate(merged_features_data):
         if third_level_item:
             output_lines.append(feature_marker_list[j])
             for title, content_list in third_level_item.items():
-                output_lines.append(f"; {title}")
+                output_lines.append(title)
                 init = [x for x in content_list if not isinstance(x, list)]
                 after = [s for sub in content_list if isinstance(sub, list) for s in sub]
                 # 打印首批内容
@@ -508,7 +498,7 @@ if merged_fixes_data['issues'] or merged_fixes_data['otherissues']:
         if not fixes_printed:
             output_lines.append("{{fixes|" + '|'.join(fixes_params) + "}}")
         for title, issues in merged_fixes_data['otherissues'].items():
-            output_lines.append(f"; {title}")
+            output_lines.append(title)
             for issue in issues:
                 output_lines.append(issue)
 
