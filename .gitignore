@@ -1,0 +1,9 @@
+.git-old/
+.idea/
+.venv/
+config.json
+output/
+test.py
+warn1.mp3
+warn2.mp3
+warn3.mp3
