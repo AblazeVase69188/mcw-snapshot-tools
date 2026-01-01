@@ -23,7 +23,7 @@ except FileNotFoundError:
     sys.exit(1)
 
 PREVIEW_FOLDER = "screen_with_panorama"
-BASE_NAME_LIST = ['AccessibilitySettings', 'BuffetWorldCustomization', 'ChatSettings', 'Controls', 'Control Settings', 'Create New World Gamerule', 'Credits and Attribution', 'Datapack selection', 'Data Packs Screen Warning', 'Debug Mode Button', 'Debug Options', 'Experiments Screen Warning', 'Font Settings', 'Language settings', 'MouseSettings', 'Multiplayer Screen', 'Multiplayer Warning', 'NewWorld More', 'NewWorld', 'NewWorld World', 'Online Options', 'Select resource pack', 'Settings Screen', 'SkinCustomizationOptions', 'Sound Options Screen', 'Telemetry Data', 'VideoSettings', 'World Selection Menu Delete', 'World Selection Menu Edit', 'World Selection Menu Optimize', 'World Selection Menu']
+BASE_NAME_LIST = ['AccessibilitySettings', 'BuffetWorldCustomization', 'ChatSettings', 'Controls', 'Control Settings', 'Create New World Gamerule', 'Credits and Attribution', 'Datapack selection', 'Data Packs Screen Warning', 'Debug Mode Button', 'Debug Options', 'Experiments Screen Warning', 'Font Settings', 'Language settings', 'MouseSettings', 'Multiplayer Screen', 'Multiplayer Warning', 'NewWorld More', 'NewWorld', 'NewWorld World', 'Online Options', 'Select resource pack', 'Settings Screen', 'SkinCustomizationOptions', 'Sound Options Screen', 'Superflat Customization', 'Superflat Preset', 'Telemetry Data', 'VideoSettings', 'World Selection Menu Delete', 'World Selection Menu Edit', 'World Selection Menu Optimize', 'World Selection Menu']
 SUFFIXES = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
 
 class App(tk.Tk):
