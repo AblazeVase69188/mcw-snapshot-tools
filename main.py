@@ -102,7 +102,8 @@ def check_new_version(selected_version):  # 检测新版本发布
         if cur_latest_release != latest_release:
             return cur_latest_release, cur_manifest_json["versions"]
 
-        article_code = '''
+        '''
+        检测官网新文章，似乎用处不大
         cur_article_json, not_modified = get_json_conditional(ARTICLE_FEED_URL)
         if not_modified:
             continue
@@ -118,22 +119,25 @@ def check_new_version(selected_version):  # 检测新版本发布
                 sys.exit(1)
             else:
                 article_json = cur_article_json
-                continue'''
+                continue
+        '''
 
 
 def get_version_type(version_name):  # 返回版本类型
-    current_year = time.strftime("%y")
-    if "1." in version_name:
-        if "-pre" in version_name:
-            return "Pre-release"
-        elif "-rc" in version_name:
-            return "Release Candidate"
-        else:
-            return "Release"
-    elif f"{current_year}w" in version_name:
+    v1_year = ["11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"]
+    v2_year = ["26", "27", "28", "29", "30", "31", "32", "33", "34", "35"]
+    v2_num = ["1", "2", "3", "4"]
+
+    if version_name in {f"{y}.{n}" for y in v2_year for n in v2_num}:
+        return "Release"
+    if "-snapshot-" in version_name:
         return "Snapshot"
-    else:
-        return "N/A"
+    elif "-pre-" in version_name:
+        return "Pre-release"
+    elif "-rc-" in version_name:
+        return "Release Candidate"
+
+    return "N/A"
 
 
 def get_zh_version_type(version_type):  # 返回版本类型的中文名称
@@ -149,6 +153,16 @@ def get_zh_version_type(version_type):  # 返回版本类型的中文名称
         return "（未指定版本类型）"
 
 
+def get_release_type(version_name):  # 返回正式版的更新类型
+    parts = version_name.split('.')
+    if len(parts) == 2:
+        return "小更新"
+    elif len(parts) == 3:
+        return "热修复更新"
+    else:
+        return "更新"
+
+
 def get_timestamp(timestamp_str):
     dt = datetime.datetime.fromisoformat(timestamp_str)
     dt_8 = dt + datetime.timedelta(hours=8)
@@ -157,48 +171,25 @@ def get_timestamp(timestamp_str):
 
 def get_mojira_version(version_name):  # 返回Mojira形式的版本号
     version_type = get_version_type(version_name)
-    if version_type == "Pre-release":
+    if version_type == "Snapshot":
         parts = version_name.split('-')
-        parent = parts[0]
-        pre_number = parts[1].replace("pre", "")
-        return f"""{parent} Pre-Release {pre_number}"""
-    elif version_type == "Release Candidate":
-        parts = version_name.split('-')
-        parent = parts[0]
-        rc_number = parts[1].replace("rc", "")
-        return f"""{parent} Release Candidate {rc_number}"""
+        return f"{parts[0]} Snapshot {parts[2]}"
+    
+    return version_name  # 其余类型暂无实际案例
 
 
 def get_article(version_name):  # 返回官网博文链接
-    left_str = "{{"
     version_type = get_version_type(version_name)
-    if version_type == "Pre-release":
-        parts = version_name.split('-')
-        parent = parts[0]
-        pre_number = parts[1].replace("pre", "")
-        return left_str + f"""article|minecraft-{parent.replace(".", "-")}-pre-release-{pre_number}|Minecraft {parent} Pre-Release {pre_number}"""
-    elif version_type == "Release Candidate":
-        parts = version_name.split('-')
-        parent = parts[0]
-        rc_number = parts[1].replace("rc", "")
-        return left_str + f"""article|minecraft-{parent.replace(".", "-")}-release-candidate-{rc_number}|Minecraft {parent} Release Candidate {rc_number}"""
-    elif version_type == "Release":
-        return left_str + f"""article|minecraft-java-edition-{version_name.replace(".", "-")}|Minecraft Java Edition {version_name}"""
-    elif version_type == "Snapshot":
-        return left_str + f"""snap|{version_name}"""
-    else:
-        return ""
+    if version_type == "Snapshot":
+        url_name = version_name.replace('.', '-')
+        title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
+        return f"""article|minecraft-{url_name}|Minecraft {title_name}"""
+    
+    return ""  # 其余类型暂无实际案例
 
 
 def get_page_url(version_name):  # 返回页面链接
-    version_type = get_version_type(version_name)
-    if version_type == "Snapshot":
-        version_page_name = version_name
-    else:
-        version_page_name = "Java%E7%89%88" + version_name
-
-    version_page_url = WIKI_BASE_URL + version_page_name
-    return version_page_url
+    return WIKI_BASE_URL + "Java%E7%89%88" + version_name
 
 
 with open("config.json", "r", encoding="utf-8") as config_file:
@@ -219,23 +210,16 @@ zh_version_type = get_zh_version_type(version_type)
 release_time = all_version_info[0]["releaseTime"]
 release_dt, release_dt_8 = get_timestamp(release_time)
 release_dt_date = f"{release_dt.year}年{release_dt.month}月{release_dt.day}日"
-is_initial_snapshot = False
+
+version_json_type = all_version_info[0]["type"]
+version_json_url = all_version_info[0]["url"]
+version_json = get_json(version_json_url)
+version_json_downloads = version_json["downloads"]
 
 if selected_version == "":
     toast_notification(f"{zh_version_type}{new_version}已发布。")
 print(f"{zh_version_type}{new_version}已发布。")
 print(f"发布时间：{release_dt_8.strftime("%Y年%m月%d日%H:%M:%S（北京时间）")}")
-
-parent_is_predicted = True
-if version_type in ["Pre-release", "Release Candidate"]:
-    parent = new_version.split('-')[0]
-    parent_is_predicted = False
-elif version_type == "Release":
-    parent = ""
-    parent_is_predicted = False
-
-if parent_is_predicted == True:
-    parent = input("正式版版本号未知，请预测：")
 
 version_page_url = get_page_url(new_version)
 
@@ -243,29 +227,45 @@ print(f"新页面链接：{version_page_url}?action=edit")
 print("内容为：")
 print("----")
 
-version_json_url = all_version_info[0]["url"]
-version_json = get_json(version_json_url)
-version_json_downloads = version_json["downloads"]
+parts = new_version.split('-')
 
-previous_versions = []  # 用于第几个同类开发版本的计数
-prevparent = "" if version_type != "Release" else "1.21" # 1.21为硬编码
+parent = ""
+prevparent = ""
+prev = ""
+next = ""
+nextparent = ""
 
-version_json_type = all_version_info[0]["type"]
+last_release_found = False
+last_snapshot_found = False
 for version in all_version_info[1:]:
-    if version["type"] == version_json_type:
-        prev = version["id"]
+    if version["type"] == "release" and not last_release_found:
+        last_release = version["id"]
+        last_release_found = True
+    if version["type"] == "snapshot" and not last_snapshot_found:
+        last_snapshot = version["id"]
+        last_snapshot_found = True
+    if last_release_found and last_snapshot_found:
         break
 
-if version_type not in ["Release", "N/A"]:
-    if all_version_info[1]["type"] == "release":
-        is_initial_snapshot = True
+if version_type == "Release":
+    prev = last_release
+else:
+    parent = parts[0]
+    prevparent = last_release
+    prev = last_snapshot
 
-    for version in all_version_info:
-        if get_version_type(version["id"]) == version_type:
-            previous_versions.append(version)
-        elif get_version_type(version["id"]) == "Release":
-            prevparent = version["id"]
-            break
+if version_type in ["Release", "N/A"]:
+    type_num = 0
+else:
+    type_num = int(parts[2])
+
+if all_version_info[1]["type"] == "release":
+    is_initial_snapshot = True
+else:
+    is_initial_snapshot = False
+
+if version_type == "Release":
+    release_type = get_release_type(parts[0])
 
 version_page_content = f"""{{{{wip}}}}
 {{{{Infobox version
@@ -280,13 +280,10 @@ version_page_content += f"""
 |jsonhash={version_json_url[len("https://piston-meta.mojang.com/v1/packages/"):].split('/')[0]}
 |clienthash={version_json_downloads["client"]["sha1"]}"""
 version_page_content += f"""
-|clientmap={version_json_downloads["client_mappings"]["sha1"]}""" if version_json_downloads["client_mappings"] else """"""
-version_page_content += f"""
 |serverhash={version_json_downloads["server"]["sha1"]}"""
+version_page_content += """""" if version_type in ["N/A", "Release"] else f"""
+|parent={parent}"""
 version_page_content += f"""
-|servermap={version_json_downloads["server_mappings"]["sha1"]}""" if version_json_downloads["server_mappings"] else """"""
-version_page_content += f"""
-|parent={parent}
 |prevparent={prevparent}
 |prev="""
 version_page_content += f"""{prev}""" if not is_initial_snapshot else """"""
@@ -299,23 +296,25 @@ version_page_content += f"""
 
 '''{new_version}'''是"""
 if version_type not in ["Release", "N/A"]:
-    version_page_content += f"""[[Java版{parent}]]"""
-    version_page_content += """{{conjecture tag}}的""" if parent_is_predicted else """的"""
-    version_page_content += f"""第{len(previous_versions)}""" if len(previous_versions) > 1 else """首"""
+    version_page_content += f"""[[Java版{parent}]]的"""
+    version_page_content += f"""第{type_num}""" if type_num > 1 else """首"""
     version_page_content += f"""个{zh_version_type}，"""
 else:
-    version_page_content += """{{el|je}}的一次次要更新，"""
+    version_page_content += f"""{{{{el|je}}}}的一次{release_type}，"""
 
 version_page_content += f"""发布于{release_dt_date}<ref>"""
+version_page_content += """{{"""
 version_page_content += f"""{get_article(new_version)}"""
 version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
 version_page_content += """}}</ref>，修复了一些漏洞。"""
-version_page_content += """
+
+if version_type not in ["Release", "N/A"]:
+    version_page_content += """
 
 == 修复 ==
 {{fixes|fixedin="""
-version_page_content += f"""{get_mojira_version(new_version)}""" if version_type in ["Pre-release", "Release Candidate"] else f"""{new_version}"""
-version_page_content += """|showdesc=1|new=1
+    version_page_content += get_mojira_version(new_version)
+    version_page_content += """|showdesc=1|new=1
 
 }}</onlyinclude>
 
@@ -323,18 +322,18 @@ version_page_content += """|showdesc=1|new=1
 {{Reflist}}
 
 == 导航 ==
-{{Navbox Java Edition versions|1.21}}""" if version_type not in ["Release", "N/A"] else """"""
+{{Navbox Java Edition versions|"""
+    version_page_content += f"""20{parts[0].split('.')[0]}"""
+    version_page_content += """}}"""
 
 print(version_page_content)
 print("----")
 
 print("编辑下面页面：")
 
-if version_type in ["Pre-release", "Release Candidate"]:
+if version_type not in ["Release", "N/A"]:
     redirect_page_url = WIKI_BASE_URL + new_version
     print(f"重定向页面：{redirect_page_url}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
-    disambig_page_url = WIKI_BASE_URL + parent
-    print(f"添加版本链接：https://zh.minecraft.wiki/w/1.21?action=edit")  # 1.21为硬编码
 
 template_version_url = WIKI_BASE_URL + "Template:Version"
 print(f"更新版本号：{template_version_url}?action=edit")
@@ -354,8 +353,7 @@ if is_initial_snapshot:
     print(f"新页面链接：{WIKI_BASE_URL}Java%E7%89%88{parent}?action=edit")
     print("内容为：")
     print("----")
-    parent_version_page_content = """{{conjecture}}
-{{wip}}""" if parent_is_predicted else """{{wip}}"""
+    parent_version_page_content = """{{wip}}"""
     parent_version_page_content += f"""
 {{{{Infobox version
 |title={parent}
@@ -365,32 +363,32 @@ if is_initial_snapshot:
 |date=未知 |planned=1
 |jsonhash=
 |clienthash=
-|clientmap=
 |serverhash=
-|servermap="""
+|prevparent="""
     parent_version_page_content += f"""
-|prevparent=1.21"""  # 1.21为硬编码
-    parent_version_page_content += f"""
-|prev={prevparent}"""  # 借用开发版本的参数
+|prev={last_release}"""
     parent_version_page_content += f"""
 |next=
 |nextparent=
 }}}}
 
-'''{parent}'''是{{{{el|je}}}}的一次次要更新，发布时间待定。<ref>"""
+'''{parent}'''是{{{{el|je}}}}即将到来的一次{get_release_type(parent)}，发布时间待定。"""
+    parent_version_page_content += """<ref>{{"""
     parent_version_page_content += f"""{get_article(new_version)}"""
     parent_version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
-    parent_version_page_content += """}}</ref>。
+    parent_version_page_content += """}}</ref>
 
 == 参考 ==
 {{Reflist}}
 
 == 导航 ==
-{{Navbox Java Edition versions|1.21}}"""
+{{Navbox Java Edition versions|"""
+    parent_version_page_content += f"""20{parent.split('.')[0]}"""
+    parent_version_page_content += """}}"""
     print(parent_version_page_content)
     print("----")
-    print(f"重定向页面：{WIKI_BASE_URL}{parent}?action=edit，内容为：#REDIRECT [[Java版{parent}]]或者如果基岩版有相同页面，则为#REDIRECT [[1.21]]")  # 1.21为硬编码
-    print(f"在上一正式版页面的infobox中添加next参数：{WIKI_BASE_URL}{prevparent}?action=edit")
+    print(f"重定向页面：{WIKI_BASE_URL}{parent}?action=edit，内容为：#REDIRECT [[Java版{parent}]]")
+    print(f"在上一正式版页面的infobox中添加next参数：{WIKI_BASE_URL}Java%E7%89%88{last_release}?action=edit")
     print(f"在上一正式版所有开发版本页面的infobox中添加nextparent参数：")
 
     snapshot_list = []
@@ -408,9 +406,7 @@ if is_initial_snapshot:
 
     # 调整为Wiki页面标题
     for i, snapshot in enumerate(snapshot_list):
-        if "-pre" in snapshot or "-rc" in snapshot:
-            snapshot_list[i] = "Java版" + snapshot
-        print(f"{WIKI_BASE_URL}{snapshot}?action=edit")
+        print(f"{WIKI_BASE_URL}Java%E7%89%88{snapshot}?action=edit")
     print("")
 
 print("上传5个文件：https://zh.minecraft.wiki/w/Special:BatchUpload")
@@ -429,7 +425,7 @@ print("菜单屏幕截图，内容为：")
 print("----")
 print("== 摘要 ==\n{{Other translation files}}\n\n== 许可协议 ==\n{{License Mojang}}\n\n[[Category:主菜单截图]]")
 print("----")
-print(f"菜单屏幕截图重定向：{WIKI_BASE_URL}File:Java_Edition_{new_version}.png?action=edit，内容为：#REDIRECT [[File:Java Edition {new_version} Simplified.png]]")
+print(f"菜单屏幕截图重定向：{WIKI_BASE_URL}File:Java_Edition_{new_version}.png?action=edit，内容为：{{{{Other translation files}}}}")
 print("")
 
 print(f"客户端jar文件内的version.json -> protocol_version：{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
