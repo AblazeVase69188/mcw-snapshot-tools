@@ -334,6 +334,10 @@ print("编辑下面页面：")
 if version_type not in ["Release", "N/A"]:
     redirect_page_url = WIKI_BASE_URL + new_version
     print(f"重定向页面：{redirect_page_url}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+    if version_type == "Snapshot":
+        other_name = new_version.replace("-", "_").replace("snapshot", "Snapshot")
+        print(f"重定向页面：{WIKI_BASE_URL}{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+        print(f"重定向页面：{WIKI_BASE_URL}Java%E7%89%88{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
 
 template_version_url = WIKI_BASE_URL + "Template:Version"
 print(f"更新版本号：{template_version_url}?action=edit")
