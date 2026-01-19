@@ -1,18 +1,23 @@
 import datetime
 import json
 import random
-
+import subprocess
 import sys
-
 import time
+import io
+import zipfile
 
+from PIL import Image
 import requests
 from playsound3 import playsound
 from winotify import Notification
 
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
-ARTICLE_FEED_URL = "https://www.minecraft.net/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json"  # from https://github.com/Teahouse-Studios/akari-bot/blob/51ec0995fd8e3eb0ab962abe157ab1badf1d13f0/modules/minecraft_news/__init__.py#L65
 WIKI_BASE_URL = "https://zh.minecraft.wiki/w/"
+MCNET_BASE_URL = "https://www.minecraft.net"
+ARTICLE_FEED_URL = MCNET_BASE_URL + "/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json"  # from https://github.com/Teahouse-Studios/akari-bot/blob/51ec0995fd8e3eb0ab962abe157ab1badf1d13f0/modules/minecraft_news/__init__.py#L65
+ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
+BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
 sound_files = [
     "warn1.mp3",
     "warn2.mp3",
@@ -178,12 +183,20 @@ def get_mojira_version(version_name):  # 返回Mojira形式的版本号
     return version_name  # 其余类型暂无实际案例
 
 
-def get_article(version_name):  # 返回官网博文链接
+def get_article_url(version_name):  # 返回官网博文链接随标题变化的部分
     version_type = get_version_type(version_name)
     if version_type == "Snapshot":
-        url_name = version_name.replace('.', '-')
+        return f"minecraft-{version_name.replace('.', '-')}"
+    
+    return ""  # 其余类型暂无实际案例
+
+
+def get_article(version_name):  # 返回模板格式的官网博文链接
+    version_type = get_version_type(version_name)
+    if version_type == "Snapshot":
+        url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
-        return f"""article|minecraft-{url_name}|Minecraft {title_name}"""
+        return f"""article|{url_name}|Minecraft {title_name}"""
     
     return ""  # 其余类型暂无实际案例
 
@@ -196,6 +209,9 @@ with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
     user_agent = config["user_agent"]
     interval = int(config["interval"])
+    MCL_path = config["MCL_path"]
+    versions_path = config["versions_path"]
+    destination_path = config["destination_path"]
 
 session = requests.Session()
 session.headers.update({"User-Agent": user_agent})
@@ -432,7 +448,34 @@ print("----")
 print(f"菜单屏幕截图重定向：{WIKI_BASE_URL}File:Java_Edition_{new_version}.png?action=edit，内容为：{{{{Other translation files}}}}")
 print("")
 
-print(f"客户端jar文件内的version.json -> protocol_version：{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
+get_img = input("下载版本宣传图按1：")
+if get_img == "1":
+    article_url = ARTICLE_BASE_URL + get_article_url(new_version)
+    article_response = requests.get(article_url, headers=BROWSER_HEADER)
+    imgsrc_end = '" class="article-head__image img-fluid" alt="'
+    imgsrc_start = '<img src="'
+    end_index = article_response.text.find(imgsrc_end)
+    start_index = article_response.text.rfind(imgsrc_start, 0, end_index) + len(imgsrc_start)
+    img_url = MCNET_BASE_URL + article_response.text[start_index:end_index]
+    img_response = requests.get(img_url, headers=BROWSER_HEADER)
+    img = Image.open(io.BytesIO(img_response.content))
+    img.save(f"{destination_path}\\{new_version}.png")
+    print(f"版本宣传图已保存至：{destination_path}\\{new_version}.png")
 
-input("按回车键退出")
-sys.exit(1)
+start_MCL = input("启动启动器按1：")
+if start_MCL == "1":
+    exe = MCL_path
+    subprocess.Popen([exe])
+
+get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
+if get_protocol == "1":
+    jar_path = f"{versions_path}\\{new_version}\\{new_version}.jar"
+    with zipfile.ZipFile(jar_path, 'r') as jar:
+        version_data = json.loads(jar.read('version.json'))
+    if int(version_data["protocol_version"]) > 1073741824:
+        protocol_num = "0x" + hex(int(version_data["protocol_version"]))[2:].upper()
+    else:
+        protocol_num = version_data["protocol_version"]
+    protocol_text = f"verJE( java, '{new_version}', {protocol_num}, {version_data['world_version']}, {{ {version_data['pack_version']['resource_major']}, {version_data['pack_version']['resource_minor']} }}, {{ {version_data['pack_version']['data_major']}, {version_data['pack_version']['data_minor']} }} )"
+    print(f"协议数据：{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
+    print(f"内容为：{protocol_text}")

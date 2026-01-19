@@ -16,8 +16,8 @@ if sys.platform == "win32":
 try:
     with open("config.json", "r", encoding="utf-8") as config_file:
         config = json.load(config_file)
-        SOURCE_FOLDER = config["panorama_source"]
-        DESTINATION_FOLDER = config["panorama_destination"]
+        SOURCE_FOLDER = config["screenshot_path"]
+        DESTINATION_FOLDER = config["destination_path"]
 except FileNotFoundError:
     messagebox.showerror("config.json文件未找到！")
     sys.exit(1)
