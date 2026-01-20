@@ -1,7 +1,7 @@
 {
     "user_agent": "",
     "interval": "整数，大于等于5",
-    "screenshot_path": "path/to/source/for/update_screen_with_panorama.py",
+    "screenshot_path": "path/to/minecraft/screenshots",
     "MCL_path": "path/to/minecraft_launcher.exe",
     "versions_path": "path/to/versions",
     "destination_path": "path/to/destination/for/files"

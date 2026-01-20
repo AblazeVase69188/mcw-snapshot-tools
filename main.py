@@ -1,6 +1,8 @@
 import datetime
 import json
+import os
 import random
+import shutil
 import subprocess
 import sys
 import time
@@ -209,6 +211,7 @@ with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
     user_agent = config["user_agent"]
     interval = int(config["interval"])
+    screenshot_path = config["screenshot_path"]
     MCL_path = config["MCL_path"]
     versions_path = config["versions_path"]
     destination_path = config["destination_path"]
@@ -479,3 +482,16 @@ if get_protocol == "1":
     protocol_text = f"verJE( java, '{new_version}', {protocol_num}, {version_data['world_version']}, {{ {version_data['pack_version']['resource_major']}, {version_data['pack_version']['resource_minor']} }}, {{ {version_data['pack_version']['data_major']}, {version_data['pack_version']['data_minor']} }} )"
     print(f"协议数据：{WIKI_BASE_URL}Module:Protocol_version/Versions?action=edit")
     print(f"内容为：{protocol_text}")
+
+get_version_screenshot = input("若已生成好主菜单截图，自动重命名截图按1：")
+if get_version_screenshot == "1":
+    variants = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
+
+    files = os.listdir(screenshot_path)
+    src_file = files[-5:-1]
+
+    for file, variant in zip(src_file, variants):
+        src_path = os.path.join(screenshot_path, file)
+        dst_name = f'Java Edition {new_version} {variant}.png'
+        dst_path = os.path.join(destination_path, dst_name)
+        shutil.move(src_path, dst_path)
