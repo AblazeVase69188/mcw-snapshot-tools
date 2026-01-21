@@ -22,7 +22,6 @@ ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
 BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
 sound_files = [
     "warn1.mp3",
-    "warn2.mp3",
     "warn3.mp3",
 ]
 
@@ -90,9 +89,11 @@ def check_new_version(selected_version):  # 检测新版本发布
             if version["id"] == selected_version:
                 return selected_version, versions[i:]
 
-        print("未找到版本，请检查输入是否正确")
-        input("按回车键退出")
-        sys.exit(1)
+        check_selected = input("未找到版本，按1继续尝试检查")
+        if check_selected == "1":
+            return get_selected_version(selected_version)
+        else:
+            sys.exit(1)
 
     # article_json, _ = get_json_conditional(ARTICLE_FEED_URL)
 
@@ -128,6 +129,15 @@ def check_new_version(selected_version):  # 检测新版本发布
                 article_json = cur_article_json
                 continue
         '''
+
+
+def get_selected_version(version_name):  # 尝试获取并返回已知的最新版本
+    while True:
+        manifest_json = get_json(MANIFEST_URL)
+        if manifest_json["versions"][0]["id"] == version_name:
+            return version_name, manifest_json["versions"]
+        
+        time.sleep(interval)
 
 
 def get_version_type(version_name):  # 返回版本类型
@@ -360,6 +370,8 @@ if version_type not in ["Release", "N/A"]:
 
 template_version_url = WIKI_BASE_URL + "Template:Version"
 print(f"更新版本号：{template_version_url}?action=edit")
+disambig_page_url = WIKI_BASE_URL + f"{parts[0].split('.')[0]}.x"
+print(f"编辑版本号消歧义页面：{disambig_page_url}?action=edit")
 
 if version_type not in ["Release", "N/A"]:
     version_list_page_url = WIKI_BASE_URL + "Java%E7%89%88%E7%89%88%E6%9C%AC%E8%AE%B0%E5%BD%95/%E5%BC%80%E5%8F%91%E7%89%88%E6%9C%AC"
