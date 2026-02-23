@@ -145,14 +145,14 @@ def get_version_type(version_name):  # 返回版本类型
     v2_year = ["26", "27", "28", "29", "30", "31", "32", "33", "34", "35"]
     v2_num = ["1", "2", "3", "4"]
 
-    if version_name in {f"{y}.{n}" for y in v2_year for n in v2_num}:
-        return "Release"
     if "-snapshot-" in version_name:
         return "Snapshot"
     elif "-pre-" in version_name:
         return "Pre-release"
     elif "-rc-" in version_name:
         return "Release Candidate"
+    if version_name in {f"{y}.{n}" for y in v2_year for n in v2_num}:
+        return "Release"
 
     return "N/A"
 
@@ -199,8 +199,15 @@ def get_article_url(version_name):  # 返回官网博文链接随标题变化的
     version_type = get_version_type(version_name)
     if version_type == "Snapshot":
         return f"minecraft-{version_name.replace('.', '-')}"
+    # 其余类型暂无实际案例
+    elif version_type == "Pre-release":
+        return f"minecraft-{version_name.replace('.', '-').replace('-pre-', '-pre-release-')}"
+    elif version_type == "Release Candidate":
+        return f"minecraft-{version_name.replace('.', '-').replace('-rc-', '-release-candidate-')}"
+    elif version_type == "Release":
+        return f"minecraft-java-edition-{version_name.replace('.', '-')}"
     
-    return ""  # 其余类型暂无实际案例
+    return ""
 
 
 def get_article(version_name):  # 返回模板格式的官网博文链接
@@ -209,8 +216,20 @@ def get_article(version_name):  # 返回模板格式的官网博文链接
         url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
         return f"""article|{url_name}|Minecraft {title_name}"""
+    # 其余类型暂无实际案例
+    elif version_type == "Pre-release":
+        url_name = get_article_url(version_name)
+        title_name = version_name.replace('-', ' ').replace('pre', 'Pre-release')
+        return f"""article|{url_name}|Minecraft {title_name}"""
+    elif version_type == "Release Candidate":
+        url_name = get_article_url(version_name)
+        title_name = version_name.replace('-', ' ').replace('rc', 'Release Candidate')
+        return f"""article|{url_name}|Minecraft {title_name}"""
+    elif version_type == "Release":
+        url_name = get_article_url(version_name)
+        return f"""article|{url_name}|Minecraft Java Edition {version_name}"""
     
-    return ""  # 其余类型暂无实际案例
+    return ""
 
 
 def get_page_url(version_name):  # 返回页面链接
@@ -463,6 +482,11 @@ print("----")
 print(f"菜单屏幕截图重定向：{WIKI_BASE_URL}File:Java_Edition_{new_version}.png?action=edit，内容为：{{{{Other translation files}}}}")
 print("")
 
+start_MCL = input("启动启动器按1：")
+if start_MCL == "1":
+    exe = MCL_path
+    subprocess.Popen([exe])
+
 get_img = input("下载版本宣传图按1：")
 if get_img == "1":
     article_url = ARTICLE_BASE_URL + get_article_url(new_version)
@@ -476,11 +500,6 @@ if get_img == "1":
     img = Image.open(io.BytesIO(img_response.content))
     img.save(f"{destination_path}\\{new_version}.png")
     print(f"版本宣传图已保存至：{destination_path}\\{new_version}.png")
-
-start_MCL = input("启动启动器按1：")
-if start_MCL == "1":
-    exe = MCL_path
-    subprocess.Popen([exe])
 
 get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
 if get_protocol == "1":
