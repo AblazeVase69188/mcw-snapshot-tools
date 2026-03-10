@@ -191,8 +191,14 @@ def get_mojira_version(version_name):  # 返回Mojira形式的版本号
     if version_type == "Snapshot":
         parts = version_name.split('-')
         return f"{parts[0]} Snapshot {parts[2]}"
+    elif version_type == "Pre-release":
+        parts = version_name.split('-')
+        return f"{parts[0]} Pre-Release {parts[2]}"
+    elif version_type == "Release Candidate":
+        parts = version_name.split('-')
+        return f"{parts[0]} Release Candidate {parts[2]}"
     
-    return version_name  # 其余类型暂无实际案例
+    return version_name  # 这一行实际上永远不会被执行
 
 
 def get_article_url(version_name):  # 返回官网博文链接随标题变化的部分
@@ -219,7 +225,7 @@ def get_article(version_name):  # 返回模板格式的官网博文链接
     # 其余类型暂无实际案例
     elif version_type == "Pre-release":
         url_name = get_article_url(version_name)
-        title_name = version_name.replace('-', ' ').replace('pre', 'Pre-release')
+        title_name = version_name.replace('-', ' ').replace('pre', 'Pre-Release')
         return f"""article|{url_name}|Minecraft {title_name}"""
     elif version_type == "Release Candidate":
         url_name = get_article_url(version_name)
@@ -384,6 +390,14 @@ if version_type not in ["Release", "N/A"]:
     print(f"重定向页面：{redirect_page_url}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
     if version_type == "Snapshot":
         other_name = new_version.replace("-", "_").replace("snapshot", "Snapshot")
+        print(f"重定向页面：{WIKI_BASE_URL}{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+        print(f"重定向页面：{WIKI_BASE_URL}Java%E7%89%88{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+    elif version_type == "Pre-release":
+        other_name = new_version.replace("-", "_").replace("pre", "Pre-Release")
+        print(f"重定向页面：{WIKI_BASE_URL}{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+        print(f"重定向页面：{WIKI_BASE_URL}Java%E7%89%88{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
+    elif version_type == "Release Candidate":
+        other_name = new_version.replace("-", "_").replace("rc", "Release_Candidate")
         print(f"重定向页面：{WIKI_BASE_URL}{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
         print(f"重定向页面：{WIKI_BASE_URL}Java%E7%89%88{other_name}?action=edit，内容为：#REDIRECT [[Java版{new_version}]]")
 
