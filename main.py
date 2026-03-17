@@ -324,7 +324,7 @@ if version_type == "Release":
 version_page_content = f"""{{{{wip}}}}
 {{{{Infobox version
 |title={new_version}
-|image={new_version}.png
+|image={new_version}.jpg
 |image2=Java Edition {new_version} Simplified.png\\Java Edition {new_version} Traditional.png\\Java Edition {new_version} Traditional HK.png
 |edition=Java"""
 version_page_content += """""" if version_type in ["N/A", "Release"] else f"""
@@ -425,7 +425,7 @@ if is_initial_snapshot:
     parent_version_page_content += f"""
 {{{{Infobox version
 |title={parent}
-|image=<!-- {parent}.png -->
+|image=<!-- {parent}.jpg -->
 |image2=<!-- Java Edition {parent} Simplified.png\\Java Edition {parent} Traditional.png\\Java Edition {parent} Traditional HK.png -->
 |edition=Java
 |date=未知 |planned=1
@@ -512,8 +512,8 @@ if get_img == "1":
     img_url = MCNET_BASE_URL + article_response.text[start_index:end_index]
     img_response = requests.get(img_url, headers=BROWSER_HEADER)
     img = Image.open(io.BytesIO(img_response.content))
-    img.save(f"{destination_path}\\{new_version}.png")
-    print(f"版本宣传图已保存至：{destination_path}\\{new_version}.png")
+    img.save(f"{destination_path}\\{new_version}.jpg")
+    print(f"版本宣传图已保存至：{destination_path}\\{new_version}.jpg")
 
 get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
 if get_protocol == "1":
@@ -533,7 +533,7 @@ if get_version_screenshot == "1":
     variants = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
 
     files = os.listdir(screenshot_path)
-    src_file = files[-5:-1]
+    src_file = files[-4:]
 
     for file, variant in zip(src_file, variants):
         src_path = os.path.join(screenshot_path, file)
