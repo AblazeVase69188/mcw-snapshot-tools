@@ -1,7 +1,6 @@
 import datetime
 import json
 import os
-import random
 import shutil
 import subprocess
 import sys
@@ -10,7 +9,7 @@ import zipfile
 
 import requests
 from playsound3 import playsound
-from winotify import Notification
+from win11toast import notify
 
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
 WIKI_BASE_URL = "https://zh.minecraft.wiki/w/"
@@ -18,10 +17,7 @@ MCNET_BASE_URL = "https://www.minecraft.net"
 ARTICLE_FEED_URL = MCNET_BASE_URL + "/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json"  # from https://github.com/Teahouse-Studios/akari-bot/blob/51ec0995fd8e3eb0ab962abe157ab1badf1d13f0/modules/minecraft_news/__init__.py#L65
 ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
 BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
-sound_files = [
-    "warn1.mp3",
-    "warn3.mp3",
-]
+sound_file = "warn3.mp3"
 
 def get_json(url):
     try:
@@ -76,15 +72,9 @@ def get_browser(url):
 
 def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹窗通知
     if doplaysound:
-        selected_sound = random.choice(sound_files)
-        playsound(selected_sound, block=False)
+        playsound(sound_file, block=False)
 
-    toast = Notification(
-        app_id="mcw-snapshot-tools",
-        title="",
-        msg=msg_str
-    )
-    toast.show()
+    notify("mcw-snapshot-tools", msg_str)
 
 
 def check_new_version(selected_version):  # 检测新版本发布
