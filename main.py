@@ -566,11 +566,17 @@ get_version_screenshot = input("若已生成好主菜单截图，自动重命名
 if get_version_screenshot == "1":
     variants = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
 
-    files = os.listdir(screenshot_path)
-    src_file = files[-4:]
+    png_entries = [
+        entry for entry in os.scandir(screenshot_path)
+        if entry.is_file() and entry.name.lower().endswith(".png")
+    ]
 
-    for file, variant in zip(src_file, variants):
-        src_path = os.path.join(screenshot_path, file)
-        dst_name = f'Java Edition {new_version} {variant}.png'
-        dst_path = os.path.join(destination_path, dst_name)
-        shutil.move(src_path, dst_path)
+    if len(png_entries) < 4:
+        print(f"截图文件夹中没有足够的图片")
+    else:
+        src_file = [e.path for e in sorted(png_entries, key=lambda e: e.stat().st_mtime)[-4:]]
+
+        for src_path, variant in zip(src_file, variants):
+            dst_name = f"Java Edition {new_version} {variant}.png"
+            dst_path = os.path.join(destination_path, dst_name)
+            shutil.move(src_path, dst_path)
