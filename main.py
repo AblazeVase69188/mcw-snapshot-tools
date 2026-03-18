@@ -6,10 +6,8 @@ import shutil
 import subprocess
 import sys
 import time
-import io
 import zipfile
 
-from PIL import Image
 import requests
 from playsound3 import playsound
 from winotify import Notification
@@ -63,6 +61,17 @@ def get_json_conditional(url):
         print(f"网络请求出现异常，内容为{e}")
         input("按回车键退出")
         sys.exit(1)
+
+
+def get_browser(url):
+    try:
+        response = session.get(url, headers=BROWSER_HEADER)
+        response.raise_for_status()
+        return response
+
+    except requests.exceptions.RequestException as e:
+        toast_notification("网络请求出现异常", False)
+        print(f"网络请求出现异常，内容为{e}")
 
 
 def toast_notification(msg_str, doplaysound=True):  # 播放音效并产生弹窗通知
@@ -205,7 +214,6 @@ def get_article_url(version_name):  # 返回官网博文链接随标题变化的
     version_type = get_version_type(version_name)
     if version_type == "Snapshot":
         return f"minecraft-{version_name.replace('.', '-')}"
-    # 其余类型暂无实际案例
     elif version_type == "Pre-release":
         return f"minecraft-{version_name.replace('.', '-').replace('-pre-', '-pre-release-')}"
     elif version_type == "Release Candidate":
@@ -222,7 +230,6 @@ def get_article(version_name):  # 返回模板格式的官网博文链接
         url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
         return f"""article|{url_name}|Minecraft {title_name}"""
-    # 其余类型暂无实际案例
     elif version_type == "Pre-release":
         url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('pre', 'Pre-Release')
@@ -504,16 +511,43 @@ if start_MCL == "1":
 get_img = input("下载版本宣传图按1：")
 if get_img == "1":
     article_url = ARTICLE_BASE_URL + get_article_url(new_version)
-    article_response = requests.get(article_url, headers=BROWSER_HEADER)
-    imgsrc_end = '" class="article-head__image img-fluid" alt="'
-    imgsrc_start = '<img src="'
-    end_index = article_response.text.find(imgsrc_end)
-    start_index = article_response.text.rfind(imgsrc_start, 0, end_index) + len(imgsrc_start)
-    img_url = MCNET_BASE_URL + article_response.text[start_index:end_index]
-    img_response = requests.get(img_url, headers=BROWSER_HEADER)
-    img = Image.open(io.BytesIO(img_response.content))
-    img.save(f"{destination_path}\\{new_version}.jpg")
-    print(f"版本宣传图已保存至：{destination_path}\\{new_version}.jpg")
+    article_response = get_browser(article_url)
+    article_text = article_response.text
+
+    imgurl_start = '<meta property="og:image" content="'
+    imgurl_end = '"/>'
+    start_index = article_text.find(imgurl_start)
+    if start_index != -1:
+        start_index += len(imgurl_start)
+        end_index = article_text.find(imgurl_end, start_index)
+        img_url = article_text[start_index:end_index]
+
+    if not img_url:
+        imgurl_start = '<meta name="twitter:image" content="'
+        start_index = article_text.find(imgurl_start)
+        if start_index != -1:
+            start_index += len(imgurl_start)
+            end_index = article_text.find(imgurl_end, start_index)
+            img_url = article_text[start_index:end_index]
+        
+    if not img_url:
+        imgsrc_end = '" class="article-head__image img-fluid" alt="'
+        imgsrc_start = '<img src="'
+        end_index = article_text.find(imgsrc_end)
+        start_index = article_text.rfind(imgsrc_start, 0, end_index)
+        if end_index != -1 and start_index != -1:
+            start_index += len(imgsrc_start)
+            img_url = MCNET_BASE_URL + article_text[start_index:end_index]
+
+    dot_index = img_url.rfind('.')
+    suffix = img_url[dot_index:].lower()
+    img_response = get_browser(img_url)
+    save_path = f"{destination_path}\\{new_version}{suffix}"
+    with open(save_path, "wb") as f:
+        f.write(img_response.content)
+    print(f"版本宣传图已保存至：{save_path}")
+    if suffix != ".jpg":
+        print("注意：获取到的图片格式不是jpg")
 
 get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
 if get_protocol == "1":
