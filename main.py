@@ -410,7 +410,12 @@ if version_type not in ["Release", "N/A"]:
     print(f"添加版本链接：{navbox_page_url}?action=edit")
     if not is_initial_snapshot:
         prev_page_url = get_page_url(prev)
-        print(f"在infobox中添加next参数：{prev_page_url}?action=edit")
+        prev_type = get_version_type(prev)
+        new_type = get_version_type(new_version)
+        if prev_type != new_type and prev_type in ["Snapshot", "Pre-release", "Release Candidate"]:
+            print(f"在infobox中添加next参数，并在导语中添加“，也是最后一个”：{prev_page_url}?action=edit")
+        else:
+            print(f"在infobox中添加next参数：{prev_page_url}?action=edit")
 print("")
 
 if is_initial_snapshot:
