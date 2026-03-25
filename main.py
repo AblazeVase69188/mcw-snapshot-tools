@@ -597,11 +597,14 @@ if get_img == "1":
     suffix = img_url[dot_index:].lower()
     img_response = get_browser(img_url)
     save_path = f"{destination_path}\\{new_version}{suffix}"
+    if suffix != ".jpg":
+        conversion = input(f"获取到的图片格式是{suffix}，强制转换成jpg按1：")
+        if conversion == "1":
+            save_path = f"{destination_path}\\{new_version}.jpg"
+
     with open(save_path, "wb") as f:
         f.write(img_response.content)
     print(f"版本宣传图已保存至：{save_path}")
-    if suffix != ".jpg":
-        print("注意：获取到的图片格式不是jpg")
 
 get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
 if get_protocol == "1":
