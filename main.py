@@ -18,6 +18,7 @@ ARTICLE_FEED_URL = MCNET_BASE_URL + "/content/minecraftnet/language-masters/en-u
 ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
 BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
 sound_file = "warn3.mp3"
+dev_version_types = {"Snapshot", "Pre-release", "Release Candidate"}
 
 def get_json(url):  # 获取json
     try:
@@ -199,14 +200,12 @@ def get_timestamp(timestamp_str):
 
 def get_mojira_version(version_name):  # 返回Mojira形式的版本号
     version_type = get_version_type(version_name)
+    parts = version_name.split('-')
     if version_type == "Snapshot":
-        parts = version_name.split('-')
         return f"{parts[0]} Snapshot {parts[2]}"
     elif version_type == "Pre-release":
-        parts = version_name.split('-')
         return f"{parts[0]} Pre-Release {parts[2]}"
     elif version_type == "Release Candidate":
-        parts = version_name.split('-')
         return f"{parts[0]} Release Candidate {parts[2]}"
     
     return version_name  # 这一行实际上永远不会被执行
@@ -228,21 +227,18 @@ def get_article_url(version_name):  # 返回官网博文链接随标题变化的
 
 def get_article(version_name):  # 返回模板格式的官网博文链接
     version_type = get_version_type(version_name)
+    url_name = get_article_url(version_name)
     if version_type == "Snapshot":
-        url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
-        return f"""article|{url_name}|Minecraft {title_name}"""
+        return f"""{url_name}|Minecraft {title_name}"""
     elif version_type == "Pre-release":
-        url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('pre', 'Pre-Release')
-        return f"""article|{url_name}|Minecraft {title_name}"""
+        return f"""{url_name}|Minecraft {title_name}"""
     elif version_type == "Release Candidate":
-        url_name = get_article_url(version_name)
         title_name = version_name.replace('-', ' ').replace('rc', 'Release Candidate')
-        return f"""article|{url_name}|Minecraft {title_name}"""
+        return f"""{url_name}|Minecraft {title_name}"""
     elif version_type == "Release":
-        url_name = get_article_url(version_name)
-        return f"""article|{url_name}|Minecraft Java Edition {version_name}"""
+        return f"""{url_name}|Minecraft Java Edition {version_name}"""
     
     return ""
 
@@ -321,19 +317,19 @@ for version in all_version_info[1:]:
 prevparent = last_release
 prev = last_snapshot
 
-if version_type not in ["Release", "N/A"]:
+if version_type in dev_version_types:
     parent = parts[0]
     type_num = int(parts[2])
 
 # 判断首个开发版本
-if all_version_info[1]["type"] == "release" and version_type not in ["Release", "N/A"]:
+if all_version_info[1]["type"] == "release" and version_type in dev_version_types:
     is_initial_snapshot = True
 else:
     is_initial_snapshot = False
 
 # 判断正式版类型
-if version_type == "Release":
-    release_type = get_release_type(parts[0])
+if version_type not in dev_version_types:
+    release_type = get_release_type(new_version)
 
 version_page_content = f"""{{{{wip}}}}
 {{{{Infobox version
@@ -353,36 +349,39 @@ version_page_content += f"""
 # 正式版infobox不填此项
 version_page_content += """""" if version_type in ["N/A", "Release"] else f"""
 |parent={parent}"""
-version_page_content += f"""
+version_page_content += """""" if version_type == "N/A" else f"""
 |prevparent={prevparent}
 |prev="""
 # 首个开发版本和正式版infobox不填此项
-version_page_content += f"""{prev}""" if not is_initial_snapshot and version_type not in ["N/A", "Release"] else """"""
-version_page_content += f"""
+version_page_content += f"""{prev}""" if version_type in dev_version_types and not is_initial_snapshot else """"""
+version_page_content += """""" if version_type == "N/A" else """
 |next=
-|nextparent=
-}}}}"""
+|nextparent="""
+version_page_content += """
+}}"""
 # 正式版不填onlyinclude
-version_page_content += """<onlyinclude>""" if version_type not in ["Release", "N/A"] else """"""
+version_page_content += """<onlyinclude>""" if version_type in dev_version_types else """"""
 version_page_content += f"""
 
 '''{new_version}'''是"""
 # 根据开发版本或正式版生成导言
-if version_type not in ["Release", "N/A"]:
+if version_type in dev_version_types:
     version_page_content += f"""[[Java版{parent}]]的"""
     version_page_content += f"""第{type_num}""" if type_num > 1 else """首"""
     version_page_content += f"""个{zh_version_type}，"""
 else:
     version_page_content += f"""{{{{el|je}}}}的一次{release_type}，"""
 
-version_page_content += f"""发布于{release_dt_date}<ref>"""
-version_page_content += """{{"""
+version_page_content += f"""发布于{release_dt_date}"""
+version_page_content += """<ref>{{article|"""
 version_page_content += f"""{get_article(new_version)}"""
 version_page_content += f"""|{release_dt.strftime("%b %d, %Y")}"""
-version_page_content += """}}</ref>，修复了一些漏洞。"""
+version_page_content += """}}</ref>"""
+version_page_content += """""" if version_type == "N/A" else """，修复了一些漏洞"""
+version_page_content += """。"""
 
 # 正式版页面只生成infobox和导言
-if version_type not in ["Release", "N/A"]:
+if version_type in dev_version_types:
     version_page_content += """
 
 == 修复 ==
@@ -400,13 +399,22 @@ if version_type not in ["Release", "N/A"]:
     version_page_content += f"""20{parent.split('.')[0]}"""
     version_page_content += """}}"""
 
+elif version_type == "N/A":
+    version_page_content += """
+
+== 参考 ==
+{{Reflist}}
+
+== 导航 ==
+{{Navbox Java Edition versions}}"""
+
 print(version_page_content)
 print("----")
 
 print("编辑下面页面：")
 
 # 2. 重定向
-if version_type not in ["Release", "N/A"]:
+if version_type in dev_version_types:
     print(f"⭐ 重定向页面：{get_edit_url(new_version)}，内容为：#REDIRECT [[Java版{new_version}]]")
     if version_type == "Snapshot":
         other_name = new_version.replace("-", "_").replace("snapshot", "Snapshot")
@@ -418,10 +426,11 @@ if version_type not in ["Release", "N/A"]:
     print(f"⭐ 重定向页面：{get_edit_url('Java版' + other_name)}，内容为：#REDIRECT [[Java版{new_version}]]")
 
 # 3. 记录开发版本和正式版的页面
-print(f"⭐ 更新版本号：{get_edit_url('Template:Version')}")
+if version_type != "N/A":
+    print(f"⭐ 更新版本号：{get_edit_url('Template:Version')}")
 
 # 4. 其他记录开发版本的页面
-if version_type not in ["Release", "N/A"]:
+if version_type in dev_version_types:
     print(f"⭐ 版本号消歧义页面：{get_edit_url(parent.split('.')[0] + '.x')}")
     print(f"⭐ 添加版本链接：{get_edit_url('Java版版本记录/开发版本')}")
     print(f"⭐ 添加版本链接：{get_edit_url('Template:Navbox_Java_Edition_versions')}")
@@ -445,7 +454,7 @@ if version_type == "Release":
     print(f"⭐ 编辑主题更新页面：{WIKI_BASE_URL}")
 
 # 如果不是首个开发版本，需要编辑前一版本的页面
-if not is_initial_snapshot:
+if not is_initial_snapshot and version_type != "N/A":
     prev_page_url = get_edit_url('Java版' + prev)
     prevparent_page_url = get_edit_url('Java版' + prevparent)
     if version_type == "Release":
@@ -462,7 +471,7 @@ print("")
 if is_initial_snapshot:
     print("这是首个开发版本，编辑下面页面：")
     parent_version_page_section_0 = f"""'''{parent}'''是{{{{el|je}}}}即将到来的一次{get_release_type(parent)}，发布时间待定。"""
-    parent_version_page_section_0 += """<ref>{{"""
+    parent_version_page_section_0 += """<ref>{{article|"""
     parent_version_page_section_0 += f"""{get_article(new_version)}"""
     parent_version_page_section_0 += f"""|{release_dt.strftime("%b %d, %Y")}"""
     parent_version_page_section_0 += """}}</ref>"""
