@@ -18,7 +18,7 @@ ARTICLE_FEED_URL = MCNET_BASE_URL + "/content/minecraftnet/language-masters/en-u
 ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
 BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
 sound_file = "warn3.mp3"
-dev_version_types = {"Snapshot", "Pre-release", "Release Candidate"}
+dev_version_types = ["Snapshot", "Pre-release", "Release Candidate"]
 
 def get_json(url):  # 获取json
     try:
@@ -156,7 +156,7 @@ def get_version_type(version_name):  # 返回版本类型
     v1_year = ["11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"]
     v2_year = ["26", "27", "28", "29", "30", "31", "32", "33", "34", "35"]
     v2_season = ["1", "2", "3", "4"]
-    v2_hotfix = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    v2_hotfix = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]  # 我就不信Mojang发的热更新还能超过10个
 
     if "-snapshot-" in version_name:
         return "Snapshot"
@@ -164,9 +164,10 @@ def get_version_type(version_name):  # 返回版本类型
         return "Pre-release"
     elif "-rc-" in version_name:
         return "Release Candidate"
-    if version_name in {f"{y}.{n}" for y in v2_year for n in v2_season}:
+    parts = version_name.split('.')
+    if len(parts) == 2 and parts[0] in v2_year and parts[1] in v2_season:
         return "Release"
-    if version_name in {f"{y}.{n}.{n}" for y in v2_year for n in v2_hotfix}:
+    if len(parts) == 3 and parts[0] in v2_year and parts[1] in v2_season and parts[2] in v2_hotfix:
         return "Release"
 
     return "N/A"
@@ -251,6 +252,87 @@ def get_edit_url(page_name):  # 返回页面编辑链接
     return WIKI_BASE_URL + requests.utils.quote(page_name) + "?action=edit"
 
 
+def get_prevparent_and_prev(version_name, all_version_info, is_first_snap):
+    """
+    返回prevparent和prev。
+
+    开发版的prevparent是上一正式版（小更新或热修复更新），prev是上一开发版
+
+    小更新的prevparent是上一小更新，prev是上一热修复更新（没有则为prevparent）
+
+    热修复更新的prevparent是上一小更新，prev是上一热修复更新（没有则为prevparent）
+
+    未知版本类型的prevparent和prev设为空
+    """
+    version_type = get_version_type(version_name)
+
+    if version_type == "N/A":
+        return "", ""
+
+    if version_type == "Release":
+        parts = version_name.split('.')
+        if len(parts) == 3:  # 热修复更新
+            prevparent = f"{parts[0]}.{parts[1]}"
+            if parts[2] == "1":  # 上一正式版就是prevparent
+                prev = ""
+            else:
+                prev = f"{parts[0]}.{parts[1]}.{int(parts[2]) - 1}"
+            return prevparent, prev
+
+        # 小更新
+        if parts[0] == "26" and parts[1] == "1":
+            return "1.21.11", ""
+
+        if parts[1] == "1":
+            prevparent = f"{int(parts[0]) - 1}.4"
+        else:
+            prevparent = f"{parts[0]}.{int(parts[1]) - 1}"
+
+        for vi in all_version_info:
+            if vi["type"] == "snapshot":
+                continue
+            if vi["id"] == prevparent:  # 上一正式版就是prevparent
+                return prevparent, ""
+            return prevparent, vi["id"]  # 是正式版而且不是prevparent
+
+    # 开发版
+    parts = version_name.split('-')
+    parent = parts[0]
+    parent_prevparent, prevparent = get_prevparent_and_prev(parent, all_version_info, False)
+    if prevparent == "":
+        prevparent = parent_prevparent
+    type_num = int(parts[2])
+    if type_num > 1:
+        return prevparent, f"{parts[0]}-{parts[1]}-{type_num - 1}"
+    if is_first_snap:
+        return prevparent, ""
+    for vi in all_version_info[1:]:
+        if vi["id"].split('-')[0] == parent:
+            return prevparent, vi["id"]
+
+
+def is_first_snapshot(version_name, all_version_info):  # 判断首个开发版本
+    version_type = get_version_type(version_name)
+    if version_type not in dev_version_types:
+        return False
+
+    parts = new_version.split('-')
+    type_num = int(parts[2])
+
+    if type_num != 1:  # 不是同类型开发版中的第一个
+        return False
+
+    parent = parts[0]
+    prevparent, _ = get_prevparent_and_prev(parent, all_version_info, False)
+    for vi in all_version_info[1:]:
+        if vi["id"] == prevparent:
+            break
+        if vi["id"].split('-')[0] == parent:
+            return False
+
+    return True
+
+
 # 初始化
 with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
@@ -295,40 +377,17 @@ print("----")
 
 # 对开发版本而言，3个元素分别是正式版、类型和序数
 parts = new_version.split('-')
-
-# infobox参数
-parent = ""
-prevparent = ""
-prev = ""
-next = ""
-nextparent = ""
-
-# 找到上一个开发版本和上一个正式版
-last_release_found = False
-last_snapshot_found = False
-for version in all_version_info[1:]:
-    if version["type"] == "release" and not last_release_found:
-        last_release = version["id"]
-        last_release_found = True
-    if version["type"] == "snapshot" and not last_snapshot_found:
-        last_snapshot = version["id"]
-        last_snapshot_found = True
-    if last_release_found and last_snapshot_found:
-        break
-
-# 对开发版本来说很直观；对正式版来说，上一个正式版需要填到prevparent的位置，而prev是为了在最后一个开发版本页面添加“也是最后一个”
-prevparent = last_release
-prev = last_snapshot
-
 if version_type in dev_version_types:
     parent = parts[0]
     type_num = int(parts[2])
 
 # 判断首个开发版本
-if all_version_info[1]["type"] == "release" and version_type in dev_version_types:
-    is_initial_snapshot = True
+if is_first_snapshot(new_version, all_version_info):
+    is_first_snap = True
 else:
-    is_initial_snapshot = False
+    is_first_snap = False
+
+prevparent, prev = get_prevparent_and_prev(new_version, all_version_info, is_first_snap)
 
 # 判断正式版类型
 if version_type not in dev_version_types:
@@ -354,10 +413,7 @@ version_page_content += """""" if version_type in ["N/A", "Release"] else f"""
 |parent={parent}"""
 version_page_content += """""" if version_type == "N/A" else f"""
 |prevparent={prevparent}
-|prev="""
-# 首个开发版本和正式版infobox不填此项
-version_page_content += f"""{prev}""" if version_type in dev_version_types and not is_initial_snapshot else """"""
-version_page_content += """""" if version_type == "N/A" else """
+|prev={prev}
 |next=
 |nextparent="""
 version_page_content += """
@@ -386,14 +442,14 @@ version_page_content += """。"""
 # 正式版页面只生成infobox和导言
 if version_type in dev_version_types:
     version_page_content += """
-
+<!--
 == 修复 ==
 {{fixes|fixedin="""
     version_page_content += get_mojira_version(new_version)
     version_page_content += """|showdesc=1|new=1
 
 }}</onlyinclude>
-
+-->
 == 参考 ==
 {{Reflist}}
 
@@ -457,21 +513,26 @@ if version_type == "Release":
     print(f"⭐ 编辑主题更新页面：{WIKI_BASE_URL}")
 
 # 如果不是首个开发版本，需要编辑前一版本的页面
-if not is_initial_snapshot and version_type != "N/A":
-    prev_page_url = get_edit_url('Java版' + prev)
-    prevparent_page_url = get_edit_url('Java版' + prevparent)
-    if version_type == "Release":
+if not is_first_snap and version_type != "N/A":
+    if version_type in dev_version_types:  # 开发版
+        prev_page_url = get_edit_url('Java版' + prev)
+        if type_num == 1:  # 同类型开发版中的第一个
+            print(f"⭐ 在infobox中添加next参数，并在导语中添加“，也是最后一个”：{prev_page_url}")
+        else:
+            print(f"⭐ 在infobox中添加next参数：{prev_page_url}")
+    else:  # 正式版
+        for vi in all_version_info[1:]:
+            if vi["type"] == "release":
+                continue
+            if vi["id"].split('-')[0] == new_version:
+                prev_page_url = get_edit_url('Java版' + vi["id"])
+                break
         print(f"⭐ 在导语中添加“，也是最后一个”：{prev_page_url}")
-        print(f"⭐ 在infobox中添加next参数：{prevparent_page_url}")
-    elif type_num == 1:
-        print(f"⭐ 在infobox中添加next参数，并在导语中添加“，也是最后一个”：{prev_page_url}")
-    else:
-        print(f"⭐ 在infobox中添加next参数：{prev_page_url}")
 
 print("")
 
 # 如果是首个开发版本，创建下一正式版的页面
-if is_initial_snapshot:
+if is_first_snap:
     print("这是首个开发版本，编辑下面页面：")
     parent_version_page_section_0 = f"""'''{parent}'''是{{{{el|je}}}}即将到来的一次{get_release_type(parent)}，发布时间待定。"""
     parent_version_page_section_0 += """<ref>{{article|"""
@@ -483,6 +544,7 @@ if is_initial_snapshot:
     print(f"⭐ 正式版页面：{get_edit_url('Java版' + parent)}")
     print("内容为：")
     print("----")
+    parent_prevparent, parent_prev = get_prevparent_and_prev(parent, all_version_info, False)
     parent_version_page_content = """{{wip}}"""
     parent_version_page_content += f"""
 {{{{Infobox version
@@ -494,8 +556,8 @@ if is_initial_snapshot:
 |jsonhash=
 |clienthash=
 |serverhash=
-|prevparent={last_release}
-|prev=
+|prevparent={parent_prevparent}
+|prev={parent_prev}
 |next=
 |nextparent=
 }}}}
@@ -549,25 +611,42 @@ if is_initial_snapshot:
         print("|}")
     print("----")
 
-    print(f"⭐ 在上一正式版页面的infobox中添加next参数：{get_edit_url('Java版' + last_release)}")
-    print(f"⭐ 在上一正式版所有开发版本页面的infobox中添加nextparent参数：")
+    if parent_prev == "":
+        parent_prev = parent_prevparent
 
-    snapshot_list = []
-    flag = False
+    if len(parent_parts) == 2:  # 如果parent是小更新，上一小更新（prevparent）和之后的版本需要在nextparent参数添加
+        prev_list = []
+        for vi in all_version_info:
+            if vi["type"] == "snapshot":
+                continue
+            prev_list.append(vi["id"])
+            if vi["id"] == parent_prevparent:
+                break
+        print("⭐ 在前正式版页面的infobox中添加nextparent参数：")
+        for pv in prev_list:
+            print(f"{get_edit_url('Java版' + pv)}")
+    elif len(parent_parts) == 3:  # 如果parent是热修复更新，上一正式版（prev）需要在next参数添加
+        print(f"⭐ 在上一正式版页面的infobox中添加next参数：{get_edit_url('Java版' + parent_prev)}")
 
-    # 获取此版本下所有开发版本
-    for version in all_version_info:
-        if version["id"] == prevparent:
-            flag = True
-            continue
-        if version["type"] == "release" and flag:
-            break
-        if flag:
-            snapshot_list.append(version["id"])
+    if parent != "26.1":
+        print(f"⭐ 在上一正式版所有开发版本页面的infobox中添加nextparent参数：")
+        # 无论parent是什么类型，都只在上一正式版（prev）的开发版页面添加
+        parent_prev_prevparent, parent_prev_prev = get_prevparent_and_prev(parent_prev, all_version_info, False)
+        if parent_prev_prev == "":
+            parent_prev_prev = parent_prev_prevparent
 
-    # 调整为Wiki页面标题
-    for i, snapshot in enumerate(snapshot_list):
-        print(f"{get_edit_url('Java版' + snapshot)}")
+        snapshot_list = []
+        for vi in all_version_info:
+            if vi["type"] == "release":
+                continue
+            if vi["id"] == parent_prev_prev:
+                break
+            if vi["id"].split('-')[0] == parent_prev:
+                snapshot_list.append(vi["id"])
+
+        # 调整为Wiki页面标题
+        for i, snapshot in enumerate(snapshot_list):
+            print(f"{get_edit_url('Java版' + snapshot)}")
     print("")
 
 # 7. 准备上传图片
