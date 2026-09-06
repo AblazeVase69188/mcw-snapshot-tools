@@ -163,7 +163,6 @@ merged_fixes_data = {
     "fixedin": [],
     "beforeVersion": "",
     "showdesc": 1,
-    "new": 1,
     "otherissuescount": 0,
     "issues": {},
     "otherissues": {}
@@ -461,7 +460,7 @@ if merged_fixes_data['issues'] or merged_fixes_data['otherissues']:
         fixes_params.append(f"beforeVersion={merged_fixes_data['beforeVersion']}")
     
     if merged_fixes_data['issues']:
-        fixes_params.extend(["showdesc=1", "new=1"])
+        fixes_params.append("showdesc=1")
 
     if merged_fixes_data['otherissuescount'] != 0:
         fixes_params.append(f"otherissuescount={merged_fixes_data['otherissuescount']}")

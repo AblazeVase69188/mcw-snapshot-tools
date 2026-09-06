@@ -476,7 +476,7 @@ if version_type in dev_version_types:
 == 修复 ==
 {{fixes|fixedin="""
     version_page_content += get_mojira_version(new_version)
-    version_page_content += """|showdesc=1|new=1
+    version_page_content += """|showdesc=1
 
 }}</onlyinclude>
 -->
