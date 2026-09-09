@@ -162,14 +162,18 @@ def get_version_type(version_name):
     """返回版本类型"""
     v1_year = {"11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"}
     v1_week = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52"}
+    v1_order = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
     v2_year = {"26", "27", "28", "29", "30", "31", "32", "33", "34", "35"}
     v2_season = {"1", "2", "3", "4"}
     v2_hotfix = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}  # 我就不信Mojang发的热更新还能超过10个
 
     # v1
-    if "w" in version_name:
-        year, week = version_name.split("w")
-        if year in v1_year and week in v1_week and len(version_name) == 6:
+    if len(version_name) == 6:
+        year_part = version_name[0:2]
+        w_part = version_name[2]
+        week_part = version_name[3:5]
+        order_part = version_name[5]
+        if year_part in v1_year and w_part == "w" and week_part in v1_week and order_part in v1_order:
             return "Snapshot"
     elif "-pre" in version_name:
         return "Pre-release"
@@ -179,10 +183,13 @@ def get_version_type(version_name):
     # v2
     if "-snapshot-" in version_name:
         return "Snapshot"
+    # 已被v1覆盖
+    '''
     elif "-pre-" in version_name:
         return "Pre-release"
     elif "-rc-" in version_name:
         return "Release Candidate"
+    '''
     parts = version_name.split('.')
     if len(parts) == 2 and parts[0] in v2_year and parts[1] in v2_season:
         return "Release"
