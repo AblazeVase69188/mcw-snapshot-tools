@@ -1,4 +1,5 @@
 import datetime
+import io
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ import time
 import zipfile
 
 import requests
+from PIL import Image
 from playsound3 import playsound
 from win11toast import notify
 
@@ -23,7 +25,7 @@ dev_version_types = ["Snapshot", "Pre-release", "Release Candidate"]
 def get_json(url):
     """获取json"""
     try:
-        response = session.get(url)
+        response = requests.get(url)
         response.raise_for_status()
         return response.json()
 
@@ -42,7 +44,7 @@ def get_json_conditional(url):
         if etag:
             headers["If-None-Match"] = etag
 
-        response = session.get(url, headers=headers)
+        response = requests.get(url, headers=headers)
 
         if response.status_code == 304:
             return None, True
@@ -62,16 +64,62 @@ def get_json_conditional(url):
         sys.exit(1)
 
 
-def get_browser(url):
+def mcnet_dld(url, filename=None):
     """模拟浏览器获取官网内容"""
     try:
-        response = session.get(url, headers=BROWSER_HEADER)
+        response = requests.get(url, stream=True, headers=BROWSER_HEADER)
         response.raise_for_status()
-        return response
+        downloaded = 0
+        start_time = time.time()
 
-    except requests.exceptions.RequestException as e:
-        toast_notification("网络请求出现异常", False)
-        print(f"网络请求出现异常，内容为{e}")
+        buffer = io.BytesIO()
+        for chunk in response.iter_content(chunk_size=1024):
+            if not chunk:
+                continue
+            buffer.write(chunk)
+            downloaded += len(chunk)
+
+            elapsed = time.time() - start_time
+            if elapsed > 0:
+                speed = downloaded / elapsed / 1024
+                print(f"\r已下载：{downloaded}B，速度：{speed:.3f}KB/s", end='', flush=True)
+            else:
+                print(f"\r已下载：{downloaded}B", end='', flush=True)
+        print()
+        buffer.seek(0)
+
+        if not filename:
+            return buffer.getvalue().decode('utf-8')
+
+        try:
+            with Image.open(buffer) as img:
+                format = img.format.lower()
+                if format == "jpeg":
+                    format = "jpg"
+                else:
+                    do_transform = input(f"获取到的图片格式为{format}，强制转换成jpg按1：")
+                    if do_transform == "1":
+                        format = "jpg"
+                
+                width, height = img.size
+                if width != 1170 or height != 500:
+                    save_anyway = input(f"获取到的图片尺寸为{width}×{height}，继续保存按1：")
+                    if save_anyway != "1":
+                        return False
+
+                save_path = f"{destination_path}\\{filename}.{format}"
+                with open(save_path, "wb") as f:
+                    img.save(f, format="JPEG" if format == "jpg" else format.upper())
+            print(f"文件已保存至：{save_path}")
+            return True
+
+        except Exception as e:
+            print(f"图片处理失败：{e}")
+            return False
+
+    except Exception as e:
+        print(f"{url}下载失败：{e}")
+        return False
 
 
 def toast_notification(msg_str, doplaysound=True):
@@ -360,6 +408,103 @@ def is_first_snapshot(version_name, all_version_info):
     return True
 
 
+def get_version_log_headimg(version_name):
+    """下载版本宣传图"""
+    # 获取官网博文html
+    print("正在查看官网博文")
+    article_url = ARTICLE_BASE_URL + get_article_url(version_name)
+    article_text = mcnet_dld(article_url)
+    if not article_text:
+        return
+
+    # 尝试获取图片链接
+    imgurl_start = '<meta property="og:image" content="'
+    imgurl_end = '"/>'
+    start_index = article_text.find(imgurl_start)
+    if start_index != -1:
+        start_index += len(imgurl_start)
+        end_index = article_text.find(imgurl_end, start_index)
+        img_url = article_text[start_index:end_index]
+
+    if not img_url:
+        imgurl_start = '<meta name="twitter:image" content="'
+        start_index = article_text.find(imgurl_start)
+        if start_index != -1:
+            start_index += len(imgurl_start)
+            end_index = article_text.find(imgurl_end, start_index)
+            img_url = article_text[start_index:end_index]
+        
+    if not img_url:
+        imgsrc_end = '" class="article-head__image img-fluid" alt="'
+        imgsrc_start = '<img src="'
+        end_index = article_text.find(imgsrc_end)
+        start_index = article_text.rfind(imgsrc_start, 0, end_index)
+        if end_index != -1 and start_index != -1:
+            start_index += len(imgsrc_start)
+            img_url = MCNET_BASE_URL + article_text[start_index:end_index]
+
+    if not img_url:
+        print("错误：没有找到版本宣传图")
+        return
+
+    # 下载图片并保存
+    print("正在下载版本宣传图")
+    mcnet_dld(img_url, version_name)
+
+
+def get_version_protocol(version_name):
+    """获取版本协议数据"""
+    jar_path = f"{versions_path}\\{version_name}\\{version_name}.jar"
+    try:
+        with zipfile.ZipFile(jar_path, 'r') as jar:
+            version_data = json.loads(jar.read('version.json'))
+    except Exception as e:
+        print(f"读取协议数据失败：{e}")
+        return
+    if int(version_data["protocol_version"]) > 1073741824:
+        protocol_num = "0x" + hex(int(version_data["protocol_version"]))[2:].upper()
+    else:
+        protocol_num = version_data["protocol_version"]
+    protocol_text = f"verJE( java, '{version_name}', {protocol_num}, {version_data['world_version']}, {{ {version_data['pack_version']['resource_major']}, {version_data['pack_version']['resource_minor']} }}, {{ {version_data['pack_version']['data_major']}, {version_data['pack_version']['data_minor']} }} )"
+    print(f"协议数据：{get_edit_url('Module:Protocol_version/Versions')}")
+    print(f"内容为：{protocol_text}")
+
+
+def rename_version_screenshots(version_name):
+    """重命名版本主菜单截图"""
+    variants = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
+
+    # 获取截图文件夹中所有png文件及其信息
+    png_entries = [
+        entry for entry in os.scandir(screenshot_path)
+        if entry.is_file() and entry.name.lower().endswith(".png")
+    ]
+    
+    if len(png_entries) < 4:
+        print(f"重命名失败：截图文件夹中没有足够的图片")
+        return
+
+    # 从旧到新排序并选择最新4个文件
+    src_file = [e for e in sorted(png_entries, key=lambda e: e.stat().st_mtime)[-4:]]
+
+    # 检查图片尺寸
+    for src in src_file:
+        with Image.open(src.path) as img:
+            width = img.width
+            height = img.height
+            if width != 854 or height != 480:
+                move_anyway = input(f"{src.name}尺寸为{width}×{height}，继续重命名按1：")
+                if move_anyway != "1":
+                    return
+
+    # 重命名并移动文件
+    for src, variant in zip(src_file, variants):
+        dst_name = f"Java Edition {version_name} {variant}.png"
+        dst_path = os.path.join(destination_path, dst_name)
+        shutil.move(src.path, dst_path)
+        print(f"已完成：{src.name}->{dst_name}")
+
+
 # 初始化
 with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
@@ -369,9 +514,6 @@ with open("config.json", "r", encoding="utf-8") as config_file:
     MCL_path = config["MCL_path"]
     versions_path = config["versions_path"]
     destination_path = config["destination_path"]
-
-session = requests.Session()
-session.headers.update({"User-Agent": user_agent})
 
 etag_cache = {}
 
@@ -735,83 +877,12 @@ if start_MCL == "1":
 
 get_img = input("下载版本宣传图按1：")
 if get_img == "1":
-    # 获取官网博文html
-    article_url = ARTICLE_BASE_URL + get_article_url(new_version)
-    article_response = get_browser(article_url)
-    article_text = article_response.text
-
-    # 尝试获取图片链接
-    imgurl_start = '<meta property="og:image" content="'
-    imgurl_end = '"/>'
-    start_index = article_text.find(imgurl_start)
-    if start_index != -1:
-        start_index += len(imgurl_start)
-        end_index = article_text.find(imgurl_end, start_index)
-        img_url = article_text[start_index:end_index]
-
-    if not img_url:
-        imgurl_start = '<meta name="twitter:image" content="'
-        start_index = article_text.find(imgurl_start)
-        if start_index != -1:
-            start_index += len(imgurl_start)
-            end_index = article_text.find(imgurl_end, start_index)
-            img_url = article_text[start_index:end_index]
-        
-    if not img_url:
-        imgsrc_end = '" class="article-head__image img-fluid" alt="'
-        imgsrc_start = '<img src="'
-        end_index = article_text.find(imgsrc_end)
-        start_index = article_text.rfind(imgsrc_start, 0, end_index)
-        if end_index != -1 and start_index != -1:
-            start_index += len(imgsrc_start)
-            img_url = MCNET_BASE_URL + article_text[start_index:end_index]
-
-    # 下载图片并保存
-    dot_index = img_url.rfind('.')
-    suffix = img_url[dot_index:].lower()
-    img_response = get_browser(img_url)
-    save_path = f"{destination_path}\\{new_version}{suffix}"
-    if suffix != ".jpg":
-        conversion = input(f"获取到的图片格式是{suffix}，强制转换成jpg按1：")
-        if conversion == "1":
-            save_path = f"{destination_path}\\{new_version}.jpg"
-
-    with open(save_path, "wb") as f:
-        f.write(img_response.content)
-    print(f"版本宣传图已保存至：{save_path}")
+    get_version_log_headimg(new_version)
 
 get_protocol = input("若启动器已下载好jar，获取协议版本按1：")
 if get_protocol == "1":
-    # 解压版本jar文件
-    jar_path = f"{versions_path}\\{new_version}\\{new_version}.jar"
-    with zipfile.ZipFile(jar_path, 'r') as jar:
-        version_data = json.loads(jar.read('version.json'))
-    if int(version_data["protocol_version"]) > 1073741824:
-        protocol_num = "0x" + hex(int(version_data["protocol_version"]))[2:].upper()
-    else:
-        protocol_num = version_data["protocol_version"]
-    protocol_text = f"verJE( java, '{new_version}', {protocol_num}, {version_data['world_version']}, {{ {version_data['pack_version']['resource_major']}, {version_data['pack_version']['resource_minor']} }}, {{ {version_data['pack_version']['data_major']}, {version_data['pack_version']['data_minor']} }} )"
-    print(f"协议数据：{get_edit_url('Module:Protocol_version/Versions')}")
-    print(f"内容为：{protocol_text}")
+    get_version_protocol(new_version)
 
 get_version_screenshot = input("若已生成好主菜单截图，自动重命名截图按1：")
 if get_version_screenshot == "1":
-    variants = ['Simplified', 'Traditional', 'Traditional HK', 'Literary']
-
-    # 获取截图文件夹中所有png文件及其信息
-    png_entries = [
-        entry for entry in os.scandir(screenshot_path)
-        if entry.is_file() and entry.name.lower().endswith(".png")
-    ]
-
-    if len(png_entries) < 4:
-        print(f"截图文件夹中没有足够的图片")
-    else:
-        # 从旧到新排序并选择最新4个文件
-        src_file = [e.path for e in sorted(png_entries, key=lambda e: e.stat().st_mtime)[-4:]]
-
-        for src_path, variant in zip(src_file, variants):
-            # 重命名并移动文件
-            dst_name = f"Java Edition {new_version} {variant}.png"
-            dst_path = os.path.join(destination_path, dst_name)
-            shutil.move(src_path, dst_path)
+    rename_version_screenshots(new_version)
