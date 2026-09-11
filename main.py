@@ -13,6 +13,7 @@ from PIL import Image
 from playsound3 import playsound
 from win11toast import notify
 
+
 MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
 WIKI_BASE_URL = "https://zh.minecraft.wiki/w/"
 MCNET_BASE_URL = "https://www.minecraft.net"
@@ -21,6 +22,7 @@ ARTICLE_BASE_URL = MCNET_BASE_URL + "/en-us/article/"
 BROWSER_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"}
 sound_file = "warn3.mp3"
 dev_version_types = ["Snapshot", "Pre-release", "Release Candidate"]
+
 
 def get_json(url):
     """获取json"""
@@ -64,13 +66,16 @@ def get_json_conditional(url):
         sys.exit(1)
 
 
-def mcnet_dld(url, filename=None):
+def mcnet_dld(url, filename=None, timeout=30):
     """模拟浏览器获取官网内容"""
     try:
-        response = requests.get(url, stream=True, headers=BROWSER_HEADER)
+        start_time = time.perf_counter()
+        response = requests.get(url, timeout=timeout, stream=True, headers=BROWSER_HEADER)
+        elapsed = time.perf_counter() - start_time
+        print(f"已收到响应头，耗时：{elapsed:.2f}s")
         response.raise_for_status()
         downloaded = 0
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         buffer = io.BytesIO()
         for chunk in response.iter_content(chunk_size=1024):
@@ -79,10 +84,10 @@ def mcnet_dld(url, filename=None):
             buffer.write(chunk)
             downloaded += len(chunk)
 
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
             if elapsed > 0:
                 speed = downloaded / elapsed / 1024
-                print(f"\r已下载：{downloaded}B，速度：{speed:.3f}KB/s", end='', flush=True)
+                print(f"\r已下载：{downloaded}B，速度：{speed:.3f}KB/s，耗时：{elapsed:.2f}s", end='', flush=True)
             else:
                 print(f"\r已下载：{downloaded}B", end='', flush=True)
         print()
@@ -210,22 +215,22 @@ def get_version_type(version_name):
     """返回版本类型"""
     v1_year = {"11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"}
     v1_week = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52"}
-    v1_order = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"}
+    v1_num = {"a", "b", "c", "d", "e"}
     v2_year = {"26", "27", "28", "29", "30", "31", "32", "33", "34", "35"}
     v2_season = {"1", "2", "3", "4"}
-    v2_hotfix = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}  # 我就不信Mojang发的热更新还能超过10个
+    v2_hotfix = {"1", "2", "3", "4", "5", "6", "7", "8"}
 
     # v1
     if len(version_name) == 6:
         year_part = version_name[0:2]
         w_part = version_name[2]
         week_part = version_name[3:5]
-        order_part = version_name[5]
-        if year_part in v1_year and w_part == "w" and week_part in v1_week and order_part in v1_order:
+        num_part = version_name[5]
+        if year_part in v1_year and w_part == "w" and week_part in v1_week and num_part in v1_num:
             return "Snapshot"
-    elif "-pre" in version_name:
+    if "-pre" in version_name:
         return "Pre-release"
-    elif "-rc" in version_name:
+    if "-rc" in version_name:
         return "Release Candidate"
 
     # v2
@@ -233,9 +238,9 @@ def get_version_type(version_name):
         return "Snapshot"
     # 已被v1覆盖
     '''
-    elif "-pre-" in version_name:
+    if "-pre-" in version_name:
         return "Pre-release"
-    elif "-rc-" in version_name:
+    if "-rc-" in version_name:
         return "Release Candidate"
     '''
     parts = version_name.split('.')
@@ -408,10 +413,54 @@ def is_first_snapshot(version_name, all_version_info):
     return True
 
 
+def is_article_exist(version_name):
+    """判断官网博文是否存在"""
+    article_url = ARTICLE_BASE_URL + get_article_url(version_name)
+    print(f"正在检查官网博文是否存在")
+    try:
+        start = time.perf_counter()
+        response = requests.head(article_url, timeout=30, headers=BROWSER_HEADER)
+        elapsed = time.perf_counter() - start
+        print(f"已收到响应头，耗时：{elapsed:.2f}s")
+        return response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        print(f"检查官网博文是否存在时出现异常：{e}")
+        return False
+
+
+def is_fixes_exist(version_name):
+    """根据官网博文判断是否存在漏洞修复"""
+    version_type = get_version_type(version_name)
+    if version_type == "N/A":
+        return False
+
+    # 获取官网博文html
+    print("正在查看官网博文以判断是否存在漏洞修复")
+    article_url = ARTICLE_BASE_URL + get_article_url(version_name)
+    article_text = mcnet_dld(article_url, timeout=10)
+    if not article_text:
+        return False
+    
+    if version_type == "Snapshot":
+        title_name = version_name.replace('-', ' ').replace('snapshot', 'Snapshot')
+    elif version_type == "Pre-release":
+        title_name = version_name.replace('-', ' ').replace('pre', 'Pre-Release')
+    elif version_type == "Release Candidate":
+        title_name = version_name.replace('-', ' ').replace('rc', 'Release Candidate')
+    else:
+        title_name = version_name
+
+    fixes_para = article_text.find(f"Fixed bugs in {title_name}")
+    if fixes_para == -1:
+        return False
+
+    return True
+
+
 def get_version_log_headimg(version_name):
     """下载版本宣传图"""
     # 获取官网博文html
-    print("正在查看官网博文")
+    print("正在查看官网博文以寻找版本宣传图")
     article_url = ARTICLE_BASE_URL + get_article_url(version_name)
     article_text = mcnet_dld(article_url)
     if not article_text:
@@ -508,7 +557,6 @@ def rename_version_screenshots(version_name):
 # 初始化
 with open("config.json", "r", encoding="utf-8") as config_file:
     config = json.load(config_file)
-    user_agent = config["user_agent"]
     interval = int(config["interval"])
     screenshot_path = config["screenshot_path"]
     MCL_path = config["MCL_path"]
@@ -572,6 +620,12 @@ if not is_first_snap:
 if version_type not in dev_version_types:
     release_type = get_release_type(new_version)
 
+article_exist = is_article_exist(new_version)
+if article_exist:
+    fixes_exist = is_fixes_exist(new_version)
+else:
+    fixes_exist = False
+
 version_page_content = f"""{{{{wip}}}}
 {{{{Infobox version
 |title={new_version}
@@ -611,24 +665,26 @@ else:
     version_page_content += f"{{{{el|je}}}}的一次{release_type}，"
 
 version_page_content += f"发布于{release_dt_date}"
-version_page_content += "<ref>{{article|"
+version_page_content += "<ref>{{article|" if article_exist else "<!--<ref>{{article|"
 version_page_content += f"{get_article(new_version)}"
 version_page_content += f"|{release_dt.strftime("%b %d, %Y")}"
-version_page_content += "}}</ref>"
-version_page_content += "" if version_type == "N/A" else "，修复了一些漏洞"
+version_page_content += "}}</ref>" if article_exist else "}}</ref>-->"
+version_page_content += "，修复了一些漏洞" if fixes_exist else ""
 version_page_content += "。"
 
 # 正式版页面只生成infobox和导言
 if version_type in dev_version_types:
-    version_page_content += """
+    if fixes_exist:
+        version_page_content += """
 <!--
 == 修复 ==
 {{fixes|fixedin="""
-    version_page_content += get_mojira_version(new_version)
-    version_page_content += """|showdesc=1
+        version_page_content += get_mojira_version(new_version)
+        version_page_content += """|showdesc=1
 
 }}</onlyinclude>
--->
+-->"""
+    version_page_content += """
 == 参考 ==
 {{Reflist}}
 
