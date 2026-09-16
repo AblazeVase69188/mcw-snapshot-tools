@@ -123,6 +123,7 @@ def mcnet_dld(url, filename=None, timeout=30):
             return False
 
     except Exception as e:
+        print()
         print(f"{url}下载失败：{e}")
         return False
 
@@ -368,6 +369,8 @@ def get_prevparent_and_prev(version_name, all_version_info, is_first_snap):
             prevparent = f"{parts[0]}.{int(parts[1]) - 1}"
 
         for vi in all_version_info:
+            if vi["id"] == version_name:
+                continue
             if vi["type"] == "snapshot":
                 continue
             if vi["id"] == prevparent:  # 上一正式版就是prevparent
