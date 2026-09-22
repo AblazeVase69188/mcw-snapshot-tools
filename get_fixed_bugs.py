@@ -177,6 +177,7 @@ query = {
     "workspaceId": "",
 }
 while True:
+    print(f'正在获取第{query["page"] + 1}页数据')
     response = requests.post(url, json=query)
     response.raise_for_status()
     cur_data = response.json()
@@ -187,6 +188,8 @@ while True:
 
 if not raw_issue_data:
     print('没有修复版本为Future Update的漏洞')
+else:
+    print(f'找到{len(raw_issue_data)}个漏洞')
 
 fixes_old = []
 fixes_dev = []
@@ -227,13 +230,20 @@ for raw_issue in reversed(raw_issue_data):
         fixes_dev.append((key, title))
 
 with open("fixes.txt", "a", encoding="utf-8") as f:
-    f.write("|;old\n")
-    for key, title in fixes_old:
-        f.write(f"|{key}|{title}\n")
-    f.write("|;dev\n")
-    for key, title in fixes_dev:
-        f.write(f"|{key}|{title}\n")
-    f.write("|;prev\n")
-    for key, title in fixes_prev:
-        f.write(f"|{key}|{title}\n")
+    print('正在写入：')
+    if fixes_old:
+        f.write("|;old\n")
+        for key, title in fixes_old:
+            f.write(f"|{key}|{title}\n")
+    print(f'|;old：{len(fixes_old)}个')
+    if fixes_dev:
+        f.write("|;dev\n")
+        for key, title in fixes_dev:
+            f.write(f"|{key}|{title}\n")
+    print(f'|;dev：{len(fixes_dev)}个')
+    if fixes_prev:
+        f.write("|;prev\n")
+        for key, title in fixes_prev:
+            f.write(f"|{key}|{title}\n")
+    print(f'|;prev：{len(fixes_prev)}个')
     f.write("\n")

@@ -678,15 +678,21 @@ version_page_content += "。"
 # 正式版页面只生成infobox和导言
 if version_type in dev_version_types:
     if fixes_exist:
+        with open("fixes.txt", "r", encoding="utf-8") as fixes_file:
+            fixes_content = fixes_file.read().strip()
+        version_page_content += "\n"
+        version_page_content += "<!--" if fixes_content == "" else ""
         version_page_content += """
-<!--
 == 修复 ==
 {{fixes|fixedin="""
         version_page_content += get_mojira_version(new_version)
         version_page_content += """|showdesc=1
-
+"""
+        version_page_content += fixes_content
+        version_page_content += """
 }}</onlyinclude>
--->"""
+"""
+        version_page_content += "-->" if fixes_content == "" else ""
     version_page_content += """
 == 参考 ==
 {{Reflist}}
