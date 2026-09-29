@@ -100,6 +100,7 @@ def mojira_v_to_manifest_v(version_name):
     version_release = version_name.split(" ")[0]
     if is_regular_version(version_release) == "v1":
         return version_release
+    version_name = version_name.replace(" Snapshot ", "-snapshot-")
     version_name = version_name.replace(" Pre-Release ", "-pre-")
     version_name = version_name.replace(" Release Candidate ", "-rc-")
     return version_name
