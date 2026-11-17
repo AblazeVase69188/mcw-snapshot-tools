@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -162,6 +164,8 @@ def cmp_version(ver_cmp, ver_base):
         return 1
 
 
+last_release, last_dev = get_last_release_and_dev()
+
 raw_issue_data = []
 
 url = "https://bugs.mojang.com/api/jql-search-post"
@@ -192,10 +196,11 @@ if not raw_issue_data:
 else:
     print(f'找到{len(raw_issue_data)}个漏洞')
 
-fixes_old = []
-fixes_dev = []
-fixes_prev = []
-last_release, last_dev = get_last_release_and_dev()
+fixes = {
+    "old": [],
+    "dev": [],
+    "prev": [],
+}
 
 # 未来可能会做细化热修复更新修复漏洞的功能
 for raw_issue in reversed(raw_issue_data):
@@ -203,11 +208,11 @@ for raw_issue in reversed(raw_issue_data):
     title = raw_issue["fields"]["summary"]
     # 偷个懒
     if int(key) < 300000:
-        fixes_old.append((key, title))
+        fixes["old"].append((key, title))
         continue
     # 如果最新版是正式版，所有漏洞归为old
     if last_release == last_dev:
-        fixes_old.append((key, title))
+        fixes["old"].append((key, title))
         continue
     
     versions = [mojira_v_to_manifest_v(v["name"]) for v in raw_issue["fields"]["versions"]]
@@ -222,29 +227,93 @@ for raw_issue in reversed(raw_issue_data):
 
     # 漏洞影响版本包含最新正式版及之前的版本，归为old
     if cmp_version(oldest_version, last_release) <= 0:
-        fixes_old.append((key, title))
+        fixes["old"].append((key, title))
     # 漏洞影响版本包含最新开发版，归为prev
     elif cmp_version(oldest_version, last_dev) == 0:
-        fixes_prev.append((key, title))
+        fixes["prev"].append((key, title))
     # 其他漏洞归为dev
     else:
-        fixes_dev.append((key, title))
+        fixes["dev"].append((key, title))
 
-with open("fixes.txt", "a", encoding="utf-8") as f:
+if os.path.exists("fixes.txt"):
+    with open("fixes.txt", "r", encoding="utf-8") as f:
+        prev_fixes_raw = f.read()
+else:
+    prev_fixes_raw = ""
+
+prev_fixes = {
+    "old": [],
+    "dev": [],
+    "prev": [],
+}
+
+for row in prev_fixes_raw.splitlines():
+    if not row.strip():
+        continue
+    if row.startswith("|;"):
+        section = row[2:].strip()
+        continue
+    if row.startswith("|"):
+        parts = row.split("|", 2)
+        if len(parts) > 2:
+            key = parts[1]
+            title = parts[2]
+            prev_fixes[section].append((key, title))
+
+removed_fixes = {
+    "old": [],
+    "dev": [],
+    "prev": [],
+}
+new_fixes = {
+    "old": [],
+    "dev": [],
+    "prev": [],
+}
+
+for section in ["old", "dev", "prev"]:
+    prev_keys = {key for key, title in prev_fixes[section]}
+    cur_keys = {key for key, title in fixes[section]}
+    removed_fixes_key = prev_keys - cur_keys
+    removed_fixes[section] = [(key, title) for key, title in prev_fixes[section] if key in removed_fixes_key]
+    new_fixes_keys = cur_keys - prev_keys
+    new_fixes[section] = [(key, title) for key, title in fixes[section] if key in new_fixes_keys]
+
+for section in removed_fixes:
+    if removed_fixes[section]:
+        print(f'警告：{section}中有{len(removed_fixes[section])}个漏洞被移除')
+        if len(removed_fixes[section]) >= 3:
+            continue
+        for key, title in removed_fixes[section]:
+            print(f'  |{key}|{title}')
+if any(lst for lst in removed_fixes.values()):
+    input("按回车键继续写入fixes.txt，或按Ctrl+C取消：")
+
+for section in new_fixes:
+    if new_fixes[section]:
+        print(f'新增{section}漏洞：{len(new_fixes[section])}个')
+        for key, title in new_fixes[section]:
+            print(f'  |{key}|{title}')
+        prev_fixes[section].extend(new_fixes[section])
+
+for section in prev_fixes:
+    prev_fixes[section].sort(key=lambda item: int(item[0]))
+
+with open("fixes.txt", "w", encoding="utf-8") as f:
     print('正在写入：')
-    if fixes_old:
+    if prev_fixes["old"]:
         f.write("|;old\n")
-        for key, title in fixes_old:
+        for key, title in prev_fixes["old"]:
             f.write(f"|{key}|{title}\n")
-    print(f'|;old：{len(fixes_old)}个')
-    if fixes_dev:
+    print(f'|;old：{len(prev_fixes["old"])}个')
+    if prev_fixes["dev"]:
         f.write("|;dev\n")
-        for key, title in fixes_dev:
+        for key, title in prev_fixes["dev"]:
             f.write(f"|{key}|{title}\n")
-    print(f'|;dev：{len(fixes_dev)}个')
-    if fixes_prev:
+    print(f'|;dev：{len(prev_fixes["dev"])}个')
+    if prev_fixes["prev"]:
         f.write("|;prev\n")
-        for key, title in fixes_prev:
+        for key, title in prev_fixes["prev"]:
             f.write(f"|{key}|{title}\n")
-    print(f'|;prev：{len(fixes_prev)}个')
+    print(f'|;prev：{len(prev_fixes["prev"])}个')
     f.write("\n")

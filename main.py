@@ -627,6 +627,7 @@ article_exist = is_article_exist(new_version)
 if article_exist:
     fixes_exist = is_fixes_exist(new_version)
 else:
+    input("官网博文是否存在检查失败，按回车继续：")
     fixes_exist = False
 
 version_page_content = f"""{{{{wip}}}}
